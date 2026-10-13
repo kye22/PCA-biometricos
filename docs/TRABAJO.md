@@ -83,7 +83,8 @@ Cambiar una interfaz = issue + aviso al grupo + PR que actualice a todos los que
 
 ### Ramas
 
-- `main`: siempre funciona. **Protegida**: nadie hace push directo, solo entra por PR.
+- `main`: siempre funciona. **Por acuerdo** (no está bloqueada en GitHub): nadie hace push
+  directo, todo entra por PR.
 - Una rama por tarea/issue, corta (horas o pocos días, no semanas), desde `main` actualizado:
 
 ```
@@ -119,7 +120,7 @@ Commits pequeños y con sentido; nada de "cambios" o "arreglos varios".
 - Título claro y `Closes #<issue>` en la descripción (cierra el issue al fusionar).
 - **1 aprobación** mínima; si toca un módulo ajeno, debe aprobar su responsable.
 - CI en verde (tests) antes de fusionar.
-- Se fusiona con **Squash and merge** y se borra la rama.
+- Se fusiona con **Squash and merge** (elegirlo en el desplegable del botón) y se borra la rama.
 - Quien abre el PR es quien lo fusiona tras la aprobación.
 
 ### Issues y tablero
@@ -146,10 +147,7 @@ mientras desarrollamos, cada uno genera los suyos.
 3. Pedir las fotos al grupo y dejarlas en `datos/fotos/`.
 4. Coger un issue, crear rama, y a trabajar.
 
-## 7. Configuración del repo (la hace el admin una vez)
+## 7. Configuración del repo
 
-- *Settings → Branches → Add rule* para `main`: requerir PR, 1 aprobación, checks en verde,
-  bloquear force-push.
-- *Settings → General → Pull Requests*: activar solo **Squash merging** y
-  *Automatically delete head branches*.
-- Crear las etiquetas de la sección 5 y el tablero en *Projects*.
+No hay reglas técnicas en GitHub: todo lo anterior funciona **por acuerdo**. Lo único a montar
+(opcional) son las etiquetas de la sección 5 y el tablero en *Projects*.
