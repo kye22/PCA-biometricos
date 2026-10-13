@@ -15,19 +15,23 @@ Secretos (claves, sal, etc.) nunca en el repo → variables de entorno / `.env` 
 ## 2. Estructura del repo
 
 ```
-src/sistema/
-  detector.py     # foto -> cara recortada/alineada/normalizada
-  pca.py          # entrenamiento PCA + cara -> template (vector)
-  bd.py           # leer/escribir el .csv de templates
-  comparador.py   # distancia/score entre templates + umbral
-  api.py          # los 9 métodos (inscribir/verificar/identificar × normal/_sd/_t)
-modelos/          # parámetros PCA entrenados (media, eigenfaces)
-datos/            # fotos (NO se suben, ver .gitignore) + bd.csv
-evaluacion/       # scripts y notebooks de métricas (FAR/FRR, EER, ROC/DET, rank-1)
-ataques/          # red team: un script por ataque + informe de resultados
-tests/            # pytest
-docs/             # este archivo, decisiones, informe final
-Dockerfile
+src/sistema/          # la librería (lo que usa el rival)
+  config.py           # rutas, TAM_CARA, nº componentes, umbral (sobrescribibles por env)
+  imagen.py           # leer foto (ruta o array)
+  detector.py         # [1] foto -> recorte de la cara
+  preprocesado.py     # [1] recorte -> cara normalizada (gris, 100x100, [0,1])
+  pca.py              # [2] ModeloPCA: entrenar / extraer / guardar / cargar
+  comparador.py       # [3] distancia entre templates + umbral
+  bd.py               # [3] leer/escribir el .csv
+  api.py              # [3] los 9 métodos
+  dataset.py          # recorrer datos/fotos/<id>/*.jpg
+  excepciones.py
+scripts/              # uso diario: entrenar_pca, inscribir_todos, verificar, identificar
+evaluacion/           # [4] metricas.py + evaluar.py (+ notebooks de gráficas)
+ataques/              # [5] red team: un script por ataque + README con la tabla
+tests/                # pytest, con caras sintéticas (no necesitan fotos)
+modelos/  datos/      # pca.npz, bd.csv y fotos (fotos fuera de git)
+Dockerfile  .github/workflows/tests.yml
 ```
 
 Regla de oro: **la lógica del sistema vive en `src/`**. Los notebooks solo exploran y pintan
@@ -48,20 +52,17 @@ responde de que funcione. Pero las tareas son **issues** y cualquiera puede coge
 
 Rellenad los nombres en el primer PR.
 
-### Interfaces que fijamos el día 1 (para no bloquearnos)
+### Interfaces (ya fijadas en el esqueleto)
 
-Nadie espera a nadie: cada módulo arranca con una **versión provisional** que cumple la interfaz.
+Todo funciona ya de punta a punta con versiones provisionales; cada uno mejora lo suyo sin
+romper la firma:
 
 ```python
-# detector.py
-def detectar(foto: np.ndarray) -> np.ndarray          # cara normalizada, p. ej. 100x100 gris float32
-# pca.py
-def extraer(cara: np.ndarray) -> np.ndarray           # template 1D float32 de longitud K
-# comparador.py
-def distancia(t1: np.ndarray, t2: np.ndarray) -> float
-# bd.py
-def guardar(id: str, template: np.ndarray) -> None
-def cargar() -> dict[str, list[np.ndarray]]           # id -> templates
+detector.detectar(foto) -> recorte              # lanza CaraNoEncontrada
+preprocesado.normalizar(recorte) -> cara        # float32 (100, 100) en [0, 1]
+ModeloPCA.extraer(cara) -> template             # float32 (K,)
+comparador.distancia(t1, t2) -> float           # menor = más parecido
+bd.guardar(id, template) / bd.cargar() -> {id: [templates]}
 ```
 
 Cambiar una interfaz = issue + aviso al grupo + PR que actualice a todos los que la usan.
@@ -142,8 +143,8 @@ mientras desarrollamos, cada uno genera los suyos.
 ## 6. Puesta en marcha (cada compañero)
 
 1. Aceptar la invitación al repo y clonarlo: `git clone <url>`.
-2. Crear entorno: `python -m venv .venv` y activarlo; `pip install -r requirements.txt`
-   (cuando exista).
+2. Crear entorno: `python -m venv .venv`, activarlo y `pip install -r requirements.txt`.
+   Comprobar con `pytest`.
 3. Pedir las fotos al grupo y dejarlas en `datos/fotos/`.
 4. Coger un issue, crear rama, y a trabajar.
 
