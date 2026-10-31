@@ -12,7 +12,7 @@ Ninguna defensa puede depender de que no vea el código; los secretos (claves) v
 | # | Ataque | Necesita | Estado actual | Defensa / mitigación | Script |
 |---|---|---|---|---|---|
 | 1 | **Impostor sin esfuerzo**: foto de un desconocido | nada | depende del umbral (FAR) | umbral elegido con evaluación | `evaluacion/evaluar.py` |
-| 2 | **Parecido / gemelo** (otro Weasley, otra Olsen, Twin Melody) | una foto | muy probable que pase: PCA no distingue gemelos | documentar: límite de PCA | _pendiente_ |
+| 2 | **Parecido / gemelo** (otro Weasley, otra Olsen, Twin Melody) | una foto | **confirmado**: Ashley Olsen entra como Mary-Kate (d=32, umbral 62) | documentar: límite de PCA | `evaluacion/evaluar.py` |
 | 3 | **Evasión**: gafas, pose, luz, edad | nada | falso rechazo o sin cara | alineado + normalización (hecho); documentar | _pendiente_ |
 | 4 | **Bypass del detector (`_sd`)**: imágenes que no son caras | acceso a `_sd` | se aceptan como caras | rechazar si el error de reconstrucción PCA es alto ("distancia al espacio de caras") | _pendiente_ |
 | 5 | **Templates fabricados (`_t`)**: ceros (= cara media), extremos | acceso a `_t` | NaN/tamaño erróneo rechazados; ceros y extremos aceptados | rechazar templates fuera de la distribución (norma, Mahalanobis) | _pendiente_ |
