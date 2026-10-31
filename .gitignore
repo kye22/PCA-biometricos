@@ -40,4 +40,4 @@ evaluacion/
 datos/pruebas/
 scripts/descargar_anexo.py
 scripts/hoja_anexo.py
-tests/test_metricas.py
+
