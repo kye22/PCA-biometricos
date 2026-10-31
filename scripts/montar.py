@@ -9,7 +9,7 @@
 4. Entrena PCA con esas caras (+ sus espejos, para tener más variedad).
 5. Inscribe a todos en una BD nueva (datos/bd.csv) con la API normal.
 6. Calcula un umbral PROVISIONAL a partir de las distancias entre personas distintas y lo
-   guarda dentro del modelo. Ver docs/decisiones.md.
+   guarda dentro del modelo.
 """
 import sys
 from pathlib import Path
@@ -124,7 +124,7 @@ def main():
     print(f"Distancias entre personas distintas: mín {min(impostoras):.1f}, "
           f"mediana {np.median(impostoras):.1f}, máx {max(impostoras):.1f}")
     print(f"Umbral PROVISIONAL = {modelo.umbral:.2f} (acepta al {args.far:.0%} de los pares de "
-          f"impostores; para medir el falso rechazo: python evaluacion/evaluar.py)")
+          f"impostores; el falso rechazo se mide con fotos distintas de las inscritas)")
     if fallos:
         print(f"\nNO inscritos ({len(fallos)}): " + ", ".join(i for i, _, _ in fallos))
         print(f"  -> para inscribirlos, marca sus ojos en {RUTA_OJOS_MANUALES.name}")
