@@ -1,10 +1,11 @@
 """Los 9 métodos del enunciado. Responsable: módulo 3 (BD, comparador y API).
 
-    foto      -> detector -> preprocesado -> PCA -> comparador <- BD
-    foto _sd  ------------> preprocesado -> PCA -> comparador <- BD
-    template _t ----------------------------------> comparador <- BD
+    foto      -> detector (+alineado) -> preprocesado -> PCA -> comparador <- BD
+    foto _sd  -----------------------> preprocesado -> PCA -> comparador <- BD
+    template _t ---------------------------------------------> comparador <- BD
 
-`foto` puede ser una ruta o un array (BGR/gris). `template` es un array 1D de longitud K.
+`foto` puede ser una ruta, bytes de un archivo o un array (BGR/gris).
+`template` es un array 1D de longitud K.
 verificar* -> bool. identificar* -> id del más cercano, o None si ninguno pasa el umbral.
 """
 from functools import lru_cache
@@ -26,15 +27,28 @@ def recargar() -> None:
     _modelo.cache_clear()
 
 
-# --- pasos de la cadena -------------------------------------------------------
+def umbral() -> float:
+    """El de la variable de entorno si existe; si no, el guardado con el modelo."""
+    if config.UMBRAL is not None:
+        return config.UMBRAL
+    return _modelo().umbral if _modelo().umbral is not None else config.UMBRAL_POR_DEFECTO
+
+
+# --- pasos de la cadena (los usa también analisis.py, para que la UI decida igual) ----
+
+def extraer(foto, con_detector: bool):
+    """foto -> (template, deteccion | None, cara_normalizada)."""
+    img = imagen.leer(foto)
+    det = detector.localizar(img) if con_detector else None
+    cara = preprocesado.normalizar(det.cara if det else img)
+    return _modelo().extraer(cara), det, cara
+
 
 def _template_desde_foto(foto, con_detector: bool) -> np.ndarray:
-    img = imagen.leer(foto)
-    cara = detector.detectar(img) if con_detector else img
-    return _modelo().extraer(preprocesado.normalizar(cara))
+    return extraer(foto, con_detector)[0]
 
 
-def _validar(template) -> np.ndarray:
+def validar(template) -> np.ndarray:
     t = np.asarray(template, dtype=np.float32).reshape(-1)
     if t.shape[0] != _modelo().dim or not np.all(np.isfinite(t)):
         raise TemplateInvalido(f"Se esperaba un vector finito de longitud {_modelo().dim}")
@@ -44,26 +58,24 @@ def _validar(template) -> np.ndarray:
 # --- núcleo común: todo acaba aquí --------------------------------------------
 
 def inscribir_t(id: str, template) -> None:
-    bd.guardar(id, _validar(template))
+    bd.guardar(id, validar(template))
 
 
 def verificar_t(id: str, template) -> bool:
-    t = _validar(template)
+    t = validar(template)
     base = bd.cargar()
     if id not in base:
         raise IdDesconocido(id)
-    return comparador.acepta(comparador.distancia_a_id(t, base[id]))
+    return comparador.acepta(comparador.distancia_a_id(t, base[id]), umbral())
 
 
 def identificar_t(template) -> str | None:
-    t = _validar(template)
+    t = validar(template)
     base = bd.cargar()
     if not base:
         return None
-    mejor_id, mejor_d = min(
-        ((i, comparador.distancia_a_id(t, ts)) for i, ts in base.items()), key=lambda x: x[1]
-    )
-    return mejor_id if comparador.acepta(mejor_d) else None
+    mejor_id, mejor_d = comparador.ranking(t, base)[0]
+    return mejor_id if comparador.acepta(mejor_d, umbral()) else None
 
 
 # --- sin detector ---------------------------------------------------------------

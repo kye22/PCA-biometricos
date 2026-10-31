@@ -22,3 +22,10 @@ desktop.ini
 .vscode/
 .idea/
 .claude/
+
+# Dataset del profe (se descomprime con scripts/montar.py)
+*.tar.gz
+datos/fotos/
+datos/bd.csv
+modelos/*.npz
+datos/inscritos.json

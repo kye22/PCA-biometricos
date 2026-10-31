@@ -10,10 +10,12 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
     "opencv-python-headless>=4.8",
+    "pillow>=11.3",   # lee AVIF (hay uno en el dataset con extensión .jpg)
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+web = ["flask>=2.3"]
+dev = ["pytest>=7", "flask>=2.3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

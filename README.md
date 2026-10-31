@@ -17,40 +17,56 @@ con base de datos en `.csv` y 51 personas inscritas.
 
 `foto` = ruta o array. `verificar*` → `bool`; `identificar*` → id o `None`.
 
-## Instalación
+## Puesta en marcha (3 comandos)
+
+Necesitas `Dataset.tar.gz` (el del profe, no está en git) en la raíz del repo.
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate        # Windows  (Linux/Mac: source .venv/bin/activate)
 pip install -r requirements.txt
-pytest                         # debe salir todo en verde
+python scripts/montar.py      # descomprime, detecta y alinea caras, entrena PCA, inscribe a todos
+python app/web.py             # interfaz web en http://localhost:5000
 ```
 
-## Uso
+`montar.py` lista foto por foto cómo ha ido la detección y termina con el umbral calculado.
+Se puede repetir cuando quieras (rehace modelo y BD desde cero).
 
-Fotos en `datos/fotos/<id>/*.jpg` (una carpeta por persona). Luego:
+### Interfaz web
+
+Subes una foto y muestra: la detección dibujada (cara y ojos), la cara alineada y normalizada,
+la reconstrucción PCA, el veredicto (identificar o verificar contra un famoso) y el ranking de
+los 5 más parecidos con distancia, umbral y confianza relativa.
+
+### Otras formas de usarlo
 
 ```bash
-python scripts/entrenar_pca.py           # -> modelos/pca.npz
-python scripts/inscribir_todos.py        # -> datos/bd.csv (1ª foto de cada persona)
-python scripts/verificar.py <id> <foto>
-python scripts/identificar.py <foto>
-python evaluacion/evaluar.py             # EER y rank-1 con el resto de fotos
+python scripts/identificar.py <foto> [--sd]
+python scripts/verificar.py <id> <foto> [--sd]
+python evaluacion/evaluar.py   # métricas con el anexo de pruebas datos/pruebas/<id>/*.jpg
+pytest                         # tests (no necesitan fotos)
 ```
-
-Todos aceptan `--sd` (omitir detector) y `--help`. Rutas y umbral configurables con
-`SISTEMA_FOTOS`, `SISTEMA_BD`, `SISTEMA_MODELO`, `SISTEMA_UMBRAL`, `SISTEMA_COMPONENTES`.
-
-Como librería:
 
 ```python
+import sys; sys.path.insert(0, "src")      # o: pip install -e .
 from sistema import inscribir, verificar, identificar
-verificar("Alvaro_Arbeloa_Coca", "foto.jpg")
+identificar("foto.jpg")                     # -> "adele" | None
 ```
+
+## Datos
+
+| Ruta | Qué es | ¿En git? |
+|---|---|---|
+| `Dataset.tar.gz` | 49 fotos del profe, 1 por persona | no |
+| `datos/fotos/` | se descomprime ahí (`nombre_apellido_AAAA.ext` → id `nombre_apellido`) | no |
+| `datos/extra/` | nuestras inscripciones (Álvaro Arbeloa), mismo formato | sí |
+| `datos/ojos_manuales.json` | ojos marcados a mano donde el detector falla | sí |
+| `datos/pruebas/<id>/` | anexo de fotos distintas para evaluar (no se inscriben) | sí |
+| `modelos/pca.npz`, `datos/bd.csv` | modelo (+ umbral) y BD generados por `montar.py` | no (de momento) |
 
 ## Docker
 
 ```bash
 docker build -t pca-biometricos .
-docker run --rm -it -v "$PWD/datos:/app/datos" pca-biometricos
+docker run --rm -p 5000:5000 pca-biometricos     # monta todo y abre la web en :5000
 ```
+
+Ataques conocidos y defensas previstas: [`ataques/README.md`](ataques/README.md).

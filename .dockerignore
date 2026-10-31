@@ -5,3 +5,6 @@ venv
 .pytest_cache
 .env
 datos/fotos
+datos/bd.csv
+datos/inscritos.json
+modelos/*.npz

@@ -5,12 +5,17 @@ verifica como la víctima. Contra la BD provisional (sin integridad) el ataque f
 
     python ataques/escritura_bd.py <id_victima> <foto_atacante> [--sd]
 
-OJO: modifica la BD. Haz copia o regenérala luego con scripts/inscribir_todos.py.
+OJO: modifica la BD. Haz copia o regenérala luego con scripts/montar.py.
 Plantilla para el resto de ataques: qué se asume del atacante, qué hace, resultado esperado.
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # usar sin instalar
+
 import argparse
 
-from sistema import api, bd, detector, imagen, preprocesado
+from sistema import api, bd
 
 
 def main():
@@ -23,9 +28,8 @@ def main():
     verificar = api.verificar_sd if args.sd else api.verificar
     print(f"Antes del ataque, ¿el atacante pasa como {args.victima}? {verificar(args.victima, args.foto_atacante)}")
 
-    img = imagen.leer(args.foto_atacante)
-    cara = img if args.sd else detector.detectar(img)
-    bd.guardar(args.victima, api._modelo().extraer(preprocesado.normalizar(cara)))  # escritura directa
+    template, _, _ = api.extraer(args.foto_atacante, con_detector=not args.sd)
+    bd.guardar(args.victima, template)  # escritura directa en el CSV, sin pasar por la API
 
     print(f"Después del ataque: {verificar(args.victima, args.foto_atacante)}")
 

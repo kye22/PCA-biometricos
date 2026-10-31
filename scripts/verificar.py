@@ -2,6 +2,11 @@
 
     python scripts/verificar.py <id> <foto> [--sd]
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # usar sin instalar
+
 import argparse
 
 from sistema import api

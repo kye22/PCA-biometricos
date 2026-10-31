@@ -1,0 +1,4 @@
+{
+ "_nota": "Ojos (x, y) en píxeles de la foto original, para las fotos donde el detector Haar no encuentra la cara. montar.py las alinea con estos puntos y las inscribe con _sd. Limitación conocida del detector.",
+ "samuel_l_jackson": [[790, 250], [960, 277]]
+}

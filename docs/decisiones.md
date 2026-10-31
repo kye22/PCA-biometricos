@@ -70,8 +70,13 @@ Niveles de detalle según distancia interpupilar (IDP): <30 px geometría genera
   varios repos (sobrecoste).
 - **2026-10-13 — Red team interno** como fase propia antes de evaluar al rival: cada hallazgo se
   arregla o se documenta como limitación conocida.
+- **2026-10-31 — Dataset del profe recibido (`Dataset.tar.gz`): 49 fotos, 1 por persona**, carpeta
+  plana `nombre_apellido_año.ext`. Con Arbeloa → **50 inscritos** (el enunciado decía 51; se asume
+  que el profe lo dejó en 50). Ids = nombre del archivo sin año ni extensión, sin corregir erratas.
+  Trampas detectadas: gemelos, fotos muy antiguas, gafas de sol, un AVIF con extensión .jpg y un
+  WebP con .jpg; el detector Haar falla en Idris Elba, Lady Gaga y Samuel L. Jackson.
+  Sin segunda foto por persona no hay evaluación genuina → hay que conseguir fotos extra.
 
-## 4. Preguntas abiertas
 
 - ¿Formato final: notebook, paquete Python, o ambos?
 - ¿Cuántas fotos por persona dará el docente (afecta a LDA/PCA y a la evaluación)?

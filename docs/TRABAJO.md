@@ -24,9 +24,11 @@ src/sistema/          # la librería (lo que usa el rival)
   comparador.py       # [3] distancia entre templates + umbral
   bd.py               # [3] leer/escribir el .csv
   api.py              # [3] los 9 métodos
-  dataset.py          # recorrer datos/fotos/<id>/*.jpg
+  analisis.py         # ranking + confianza + detección, para la interfaz (misma lógica que api)
+  dataset.py          # ids desde nombres de archivo, anexo de pruebas, descomprimir el tar.gz
   excepciones.py
-scripts/              # uso diario: entrenar_pca, inscribir_todos, verificar, identificar
+scripts/              # montar.py (todo en un comando), verificar, identificar
+app/web.py            # interfaz web para probar subiendo fotos
 evaluacion/           # [4] metricas.py + evaluar.py (+ notebooks de gráficas)
 ataques/              # [5] red team: un script por ataque + README con la tabla
 tests/                # pytest, con caras sintéticas (no necesitan fotos)
