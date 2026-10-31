@@ -124,7 +124,7 @@ def main():
     print(f"Distancias entre personas distintas: mín {min(impostoras):.1f}, "
           f"mediana {np.median(impostoras):.1f}, máx {max(impostoras):.1f}")
     print(f"Umbral PROVISIONAL = {modelo.umbral:.2f} (acepta al {args.far:.0%} de los pares de "
-          f"impostores; la tasa de falso rechazo es desconocida hasta tener fotos de prueba)")
+          f"impostores; para medir el falso rechazo: python evaluacion/evaluar.py)")
     if fallos:
         print(f"\nNO inscritos ({len(fallos)}): " + ", ".join(i for i, _, _ in fallos))
         print(f"  -> para inscribirlos, marca sus ojos en {RUTA_OJOS_MANUALES.name}")
