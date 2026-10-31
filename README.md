@@ -4,6 +4,7 @@ Práctica de grupo: sistema de reconocimiento facial basado en **PCA (eigenfaces
 con base de datos en `.csv` y 51 personas inscritas.
 
 - Enunciado: [`Prácticas.md`](Prácticas.md) (original en `Prácticas.pdf`)
+- **Reporte (cómo funciona PCA, limitaciones y mejoras):** [`docs/REPORTE.md`](docs/REPORTE.md)
 - **Cómo trabajamos (reparto y ramas):** [`docs/TRABAJO.md`](docs/TRABAJO.md)
 - Decisiones y su porqué: [`docs/decisiones.md`](docs/decisiones.md)
 
