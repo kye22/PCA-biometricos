@@ -12,6 +12,7 @@ RUTA_PRUEBAS = Path(os.getenv("SISTEMA_PRUEBAS", RAIZ / "datos" / "pruebas"))  #
 RUTA_BD = Path(os.getenv("SISTEMA_BD", RAIZ / "datos" / "bd.csv"))
 RUTA_INSCRITOS = Path(os.getenv("SISTEMA_INSCRITOS", RAIZ / "datos" / "inscritos.json"))
 RUTA_MODELO = Path(os.getenv("SISTEMA_MODELO", RAIZ / "modelos" / "pca.npz"))
+RUTA_YUNET = RAIZ / "modelos" / "face_detection_yunet_2023mar.onnx"   # detector de caras
 
 # Cara normalizada (ancho, alto)
 TAM_CARA = (100, 100)

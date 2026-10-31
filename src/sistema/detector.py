@@ -1,14 +1,14 @@
 """Detector de caras + alineado por los ojos. Responsable: módulo 1 (detector y preprocesado).
 
-1. Busca caras con varias cascadas Haar de OpenCV (la primera que encuentre algo gana) y se
-   queda con la más grande.
-2. Busca los dos ojos dentro de la cara. Si no los encuentra (gafas de sol, perfil...), estima
-   su posición a partir del recuadro. Nunca se inventa una cara: sin recuadro -> CaraNoEncontrada.
+1. YuNet (red pequeña de OpenCV, modelos/face_detection_yunet_2023mar.onnx): da la cara y la
+   posición real de los ojos. Se queda con la cara más grande.
+2. Si YuNet no encuentra nada (o no está el modelo): cascadas Haar + detector de ojos Haar; si
+   los ojos no aparecen, se estiman a partir del recuadro.
+   Nunca se inventa una cara: sin recuadro -> CaraNoEncontrada.
 3. Rota y escala para que los ojos queden siempre en el mismo sitio y recorta solo la cara
    (fuera pelo, fondo y cuello en lo posible). Así PCA compara caras, no peinados.
-
-Pendiente: detector con landmarks (YuNet) para mejores ojos y menos fallos.
 """
+from functools import lru_cache
 from dataclasses import dataclass
 
 import cv2
@@ -24,6 +24,7 @@ _CASCADAS = [
 ]
 _OJOS = cv2.CascadeClassifier(_HAAR + "haarcascade_eye.xml")
 
+UMBRAL_YUNET = 0.6       # confianza mínima de YuNet para aceptar una cara
 LADO_MAX = 1000          # se reduce la foto a esto para detectar (velocidad)
 OJO_Y = 0.36             # altura de los ojos en la cara alineada (fracción del alto)
 OJO_X = (0.30, 0.70)     # posición horizontal de cada ojo (fracción del ancho)
@@ -34,8 +35,31 @@ class Deteccion:
     caja: tuple[int, int, int, int]                      # x, y, ancho, alto en la foto original
     ojos: tuple[tuple[float, float], tuple[float, float]]  # (ojo izq. en la imagen, ojo der.)
     ojos_detectados: bool                                # False = posición estimada
-    cascada: str
+    cascada: str                                         # "yunet", "default", "alt2", "alt", "manual"
     cara: np.ndarray                                     # recorte alineado, gris uint8, TAM_CARA
+
+
+@lru_cache(maxsize=1)
+def _yunet():
+    if not config.RUTA_YUNET.exists():
+        return None
+    # Se pasa en memoria: OpenCV no abre rutas con tildes en Windows ("Prácticas")
+    modelo = np.frombuffer(config.RUTA_YUNET.read_bytes(), np.uint8)
+    return cv2.FaceDetectorYN.create("onnx", modelo, np.array([], np.uint8), (320, 320), UMBRAL_YUNET, 0.3, 50)
+
+
+def _yunet_detectar(color: np.ndarray):
+    """-> (caja, (ojo_izq, ojo_der)) de la cara más grande, o None. Ojos ordenados por x en la imagen."""
+    detector = _yunet()
+    if detector is None:
+        return None
+    detector.setInputSize((color.shape[1], color.shape[0]))
+    _, caras = detector.detect(color)
+    if caras is None or not len(caras):
+        return None
+    c = max(caras, key=lambda c: c[2] * c[3])
+    ojos = sorted([(float(c[4]), float(c[5])), (float(c[6]), float(c[7]))])
+    return tuple(int(v) for v in c[:4]), (ojos[0], ojos[1])
 
 
 def _iou(a, b) -> float:
@@ -103,13 +127,20 @@ def _alinear(gris: np.ndarray, ojo_izq, ojo_der) -> np.ndarray:
 
 def localizar(foto: np.ndarray) -> Deteccion:
     """Foto completa (BGR o gris) -> detección con caja, ojos y cara alineada."""
-    gris = cv2.cvtColor(foto, cv2.COLOR_BGR2GRAY) if foto.ndim == 3 else foto
-    gris = gris.astype(np.uint8)
+    foto = foto.astype(np.uint8)
+    color = foto if foto.ndim == 3 else cv2.cvtColor(foto, cv2.COLOR_GRAY2BGR)
+    gris = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY)
     f = min(1.0, LADO_MAX / max(gris.shape))
-    peq = cv2.resize(gris, None, fx=f, fy=f, interpolation=cv2.INTER_AREA) if f < 1 else gris
+    reducir = lambda im: cv2.resize(im, None, fx=f, fy=f, interpolation=cv2.INTER_AREA) if f < 1 else im
 
-    cascada, caja = _caja(peq)
-    (izq, der), detectados = _ojos(peq, caja)
+    yunet = _yunet_detectar(reducir(color))
+    if yunet:
+        cascada, detectados = "yunet", True
+        caja, (izq, der) = yunet
+    else:
+        peq = reducir(gris)
+        cascada, caja = _caja(peq)
+        (izq, der), detectados = _ojos(peq, caja)
 
     a_orig = lambda p: (p[0] / f, p[1] / f)
     izq, der = a_orig(izq), a_orig(der)

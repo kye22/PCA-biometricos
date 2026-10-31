@@ -89,8 +89,7 @@ def bonito(id_: str | None) -> str:
 @app.route("/", methods=["GET", "POST"])
 def inicio():
     ctx = {"ids": sorted(bd.cargar()), "bonito": bonito, "error": None, "r": None,
-           "modo": request.form.get("modo", "identificar"), "id_ver": request.form.get("id_ver", ""),
-           "sd": bool(request.form.get("sd"))}
+           "modo": request.form.get("modo", "identificar"), "id_ver": request.form.get("id_ver", "")}
     try:
         api._modelo()
     except ErrorSistema as e:
@@ -102,24 +101,23 @@ def inicio():
         try:
             ctx["r"] = resultado(datos, ctx)
         except CaraNoEncontrada:
-            ctx["error"] = ("No se ha detectado ninguna cara. Prueba con otra foto o marca "
-                            "'sin detector' si la foto ya es un recorte de la cara.")
+            ctx["error"] = ("No se ha detectado ninguna cara. Prueba con una foto más frontal "
+                            "en la que la cara salga más grande.")
         except (ValueError, ErrorSistema) as e:
             ctx["error"] = str(e)
     return render_template_string(PLANTILLA, **ctx)
 
 
 def resultado(datos: bytes, ctx: dict) -> dict:
-    a = analisis.analizar(datos, con_detector=not ctx["sd"])
+    a = analisis.analizar(datos)
     img = imagen.leer(datos)
     huella = hashlib.sha256(datos).hexdigest()
     misma = next((i for i, fs in inscritos().items() if any(f["sha256"] == huella for f in fs)), None)
 
     r = {
         "a": a,
-        "foto": a_base64(dibujar_deteccion(img, a.deteccion) if a.deteccion else img, 640),
-        "alineada": a_base64(cv2.resize(a.deteccion.cara if a.deteccion else a_gris_visible(a.cara, 1),
-                                        None, fx=2, fy=2)),
+        "foto": a_base64(dibujar_deteccion(img, a.deteccion), 640),
+        "alineada": a_base64(cv2.resize(a.deteccion.cara, None, fx=2, fy=2)),
         "normalizada": a_base64(a_gris_visible(a.cara)),
         "reconstruida": a_base64(a_gris_visible(a.reconstruccion)),
         "misma": misma,
@@ -164,7 +162,6 @@ PLANTILLA = """<!doctype html>
  <label><input type="radio" name="modo" value="identificar" {{ 'checked' if modo=='identificar' }}> Identificar (¿quién es?)</label>
  <label><input type="radio" name="modo" value="verificar" {{ 'checked' if modo=='verificar' }}> Verificar como
   <select name="id_ver">{% for i in ids %}<option value="{{i}}" {{ 'selected' if i==id_ver }}>{{ bonito(i) }}</option>{% endfor %}</select></label>
- <label title="La foto ya es un recorte de la cara: se salta el detector (métodos _sd)"><input type="checkbox" name="sd" {{ 'checked' if sd }}> sin detector</label>
  <button>Analizar</button>
 </form></div>
 
@@ -187,7 +184,7 @@ PLANTILLA = """<!doctype html>
 
 <div class="card"><div class="fila">
  <figure><img src="data:image/jpeg;base64,{{ r.foto }}"><figcaption>
-  {% if a.deteccion %}Detección ({{ a.deteccion.cascada }}): cara en verde; ojos {{ 'detectados (amarillo)' if a.deteccion.ojos_detectados else 'NO detectados, posición estimada (rojo)' }}{% else %}Sin detector (_sd): la foto entra tal cual{% endif %}</figcaption></figure>
+  Detección ({{ a.deteccion.cascada }}): cara en verde; ojos {{ 'detectados (amarillo)' if a.deteccion.ojos_detectados else 'NO detectados, posición estimada (rojo)' }}</figcaption></figure>
  <figure><img src="data:image/jpeg;base64,{{ r.alineada }}"><figcaption>Cara alineada: ojos siempre en el mismo sitio</figcaption></figure>
  <figure><img src="data:image/jpeg;base64,{{ r.normalizada }}"><figcaption>Normalizada (lo que entra a PCA): elipse, luz igualada</figcaption></figure>
  <figure><img src="data:image/jpeg;base64,{{ r.reconstruida }}"><figcaption>Reconstrucción desde el template ({{ a.template|length }} números): lo que PCA "ve"</figcaption></figure>
