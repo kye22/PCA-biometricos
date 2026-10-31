@@ -1,18 +1,22 @@
 """Los 9 métodos del enunciado. Responsable: módulo 3 (BD, comparador y API).
 
-    foto      -> detector (+alineado) -> preprocesado -> PCA -> comparador <- BD
+    foto      -> detector (+alineado) -> [calidad] -> preprocesado -> PCA -> comparador <- BD
     foto _sd  -----------------------> preprocesado -> PCA -> comparador <- BD
     template _t ---------------------------------------------> comparador <- BD
 
 `foto` puede ser una ruta, bytes de un archivo o un array (BGR/gris).
 `template` es un array 1D de longitud K.
 verificar* -> bool. identificar* -> id del más cercano, o None si ninguno pasa el umbral.
+
+Control de calidad (calidad.py): verificar() e identificar() lanzan CalidadInsuficiente si la foto
+tiene varias caras, una cara muy pequeña o girada, o los ojos/la boca tapados. inscribir() no lo
+aplica (se inscribe lo que da el dataset; montar.py avisa) y los _sd no pueden (no hay detección).
 """
 from functools import lru_cache
 
 import numpy as np
 
-from . import bd, comparador, config, detector, imagen, preprocesado
+from . import bd, calidad, comparador, config, detector, imagen, preprocesado
 from .excepciones import IdDesconocido, TemplateInvalido
 from .pca import ModeloPCA
 
@@ -36,16 +40,19 @@ def umbral() -> float:
 
 # --- pasos de la cadena (los usa también analisis.py, para que la UI decida igual) ----
 
-def extraer(foto, con_detector: bool):
-    """foto -> (template, deteccion | None, cara_normalizada)."""
+def extraer(foto, con_detector: bool, control: bool = False):
+    """foto -> (template, deteccion | None, cara_normalizada).
+    control=True aplica el control de calidad (solo tiene efecto con detector)."""
     img = imagen.leer(foto)
     det = detector.localizar(img) if con_detector else None
+    if det is not None and control:
+        calidad.exigir(det)
     cara = preprocesado.normalizar(det.cara if det else img)
     return _modelo().extraer(cara), det, cara
 
 
-def _template_desde_foto(foto, con_detector: bool) -> np.ndarray:
-    return extraer(foto, con_detector)[0]
+def _template_desde_foto(foto, con_detector: bool, control: bool = False) -> np.ndarray:
+    return extraer(foto, con_detector, control)[0]
 
 
 def validar(template) -> np.ndarray:
@@ -99,8 +106,8 @@ def inscribir(id: str, foto) -> None:
 
 
 def verificar(id: str, foto) -> bool:
-    return verificar_t(id, _template_desde_foto(foto, con_detector=True))
+    return verificar_t(id, _template_desde_foto(foto, con_detector=True, control=True))
 
 
 def identificar(foto) -> str | None:
-    return identificar_t(_template_desde_foto(foto, con_detector=True))
+    return identificar_t(_template_desde_foto(foto, con_detector=True, control=True))

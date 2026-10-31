@@ -4,9 +4,9 @@ Sistema de reconocimiento facial basado en **PCA (eigenfaces)** en Python, con b
 `.csv`. Inscribe a 50 personas: las 49 del dataset y Álvaro Arbeloa.
 
 ```
-foto ─► detector (YuNet) ─► alineado por ojos ─► normalización ─► PCA ─► template (50 números)
-                                                                              │
-                                                     comparador (distancia) ◄─┴─► bd.csv
+foto ─► detector (YuNet) ─► control de calidad ─► alineado ─► normalización ─► PCA ─► template
+                                                                                           │
+                                                                  comparador (distancia) ◄─┴─► bd.csv
 ```
 
 ## Puesta en marcha
@@ -62,6 +62,24 @@ verificar("alvaro_arbeloa_coca", "foto.jpg")  # -> True | False
 
 `foto` puede ser una ruta, los bytes de un archivo o un array. Los ids son el nombre del archivo
 del dataset sin el año (`serenna_williams_2017.jpg` → `serenna_williams`).
+
+## Control de calidad
+
+`verificar()` e `identificar()` rechazan la foto (excepción `CalidadInsuficiente`, con los motivos)
+si no se puede decidir con fiabilidad:
+
+| Motivo | Cuándo |
+|---|---|
+| `varias_caras` | hay otra cara de tamaño comparable (no se elige una por nuestra cuenta) |
+| `cara_pequena` | menos de 30 px entre los ojos |
+| `perfil` | la cara está muy girada (nariz desplazada respecto a los ojos) |
+| `ojos_ocultos` | la zona de los ojos es mucho más oscura que frente y mejillas (gafas de sol) |
+| `boca_oculta` | la zona de nariz y boca casi no tiene contraste (mascarilla) |
+
+Si no hay ninguna cara se lanza `CaraNoEncontrada` (YuNet; Haar solo si encuentra los dos ojos).
+`inscribir()` no aplica el control (se inscribe lo que trae el dataset; `montar.py` avisa) y los
+métodos `_sd` tampoco, porque sin detector no hay puntos de la cara con los que medir.
+El control no usa PCA. Umbrales y medidas en `src/sistema/calidad.py`.
 
 ## Tests
 

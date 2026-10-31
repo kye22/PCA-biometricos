@@ -2,14 +2,15 @@
 
 1. YuNet (red pequeña de OpenCV, modelos/face_detection_yunet_2023mar.onnx): da la cara y la
    posición real de los ojos. Se queda con la cara más grande.
-2. Si YuNet no encuentra nada (o no está el modelo): cascadas Haar + detector de ojos Haar; si
-   los ojos no aparecen, se estiman a partir del recuadro.
+2. Si YuNet no encuentra nada: cascadas Haar, pero SOLO se acepta la cara si además se encuentran
+   los dos ojos (Haar a secas "ve" caras en fondos y texturas). Si no está el modelo YuNet,
+   Haar funciona como antes (ojos estimados si no aparecen).
    Nunca se inventa una cara: sin recuadro -> CaraNoEncontrada.
 3. Rota y escala para que los ojos queden siempre en el mismo sitio y recorta solo la cara
    (fuera pelo, fondo y cuello en lo posible). Así PCA compara caras, no peinados.
 """
 from functools import lru_cache
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
@@ -37,6 +38,10 @@ class Deteccion:
     ojos_detectados: bool                                # False = posición estimada
     cascada: str                                         # "yunet", "default", "alt2", "alt", "manual"
     cara: np.ndarray                                     # recorte alineado, gris uint8, TAM_CARA
+    confianza: float = 1.0                               # de YuNet (1.0 si no viene de YuNet)
+    nariz: tuple[float, float] | None = None             # puntos de YuNet en la foto original
+    boca: tuple[tuple[float, float], tuple[float, float]] | None = None   # comisuras (izq., der.)
+    otras: list = field(default_factory=list)            # [(caja, confianza)] de las demás caras
 
 
 @lru_cache(maxsize=1)
@@ -48,18 +53,21 @@ def _yunet():
     return cv2.FaceDetectorYN.create("onnx", modelo, np.array([], np.uint8), (320, 320), UMBRAL_YUNET, 0.3, 50)
 
 
-def _yunet_detectar(color: np.ndarray):
-    """-> (caja, (ojo_izq, ojo_der)) de la cara más grande, o None. Ojos ordenados por x en la imagen."""
+def _yunet_detectar(color: np.ndarray) -> list[dict] | None:
+    """Todas las caras de YuNet, de mayor a menor: [{caja, confianza, ojos, nariz, boca}].
+    None si no está el modelo. Ojos y comisuras ordenados por x en la imagen."""
     detector = _yunet()
     if detector is None:
         return None
     detector.setInputSize((color.shape[1], color.shape[0]))
     _, caras = detector.detect(color)
-    if caras is None or not len(caras):
-        return None
-    c = max(caras, key=lambda c: c[2] * c[3])
-    ojos = sorted([(float(c[4]), float(c[5])), (float(c[6]), float(c[7]))])
-    return tuple(int(v) for v in c[:4]), (ojos[0], ojos[1])
+    if caras is None:
+        return []
+    punto = lambda c, i: (float(c[4 + 2 * i]), float(c[5 + 2 * i]))
+    salida = [{"caja": tuple(int(v) for v in c[:4]), "confianza": float(c[14]),
+               "ojos": tuple(sorted([punto(c, 0), punto(c, 1)])), "nariz": punto(c, 2),
+               "boca": tuple(sorted([punto(c, 3), punto(c, 4)]))} for c in caras]
+    return sorted(salida, key=lambda d: d["caja"][2] * d["caja"][3], reverse=True)
 
 
 def _iou(a, b) -> float:
@@ -133,19 +141,26 @@ def localizar(foto: np.ndarray) -> Deteccion:
     f = min(1.0, LADO_MAX / max(gris.shape))
     reducir = lambda im: cv2.resize(im, None, fx=f, fy=f, interpolation=cv2.INTER_AREA) if f < 1 else im
 
-    yunet = _yunet_detectar(reducir(color))
-    if yunet:
-        cascada, detectados = "yunet", True
-        caja, (izq, der) = yunet
-    else:
-        peq = reducir(gris)
-        cascada, caja = _caja(peq)
-        (izq, der), detectados = _ojos(peq, caja)
-
     a_orig = lambda p: (p[0] / f, p[1] / f)
+    caja_orig = lambda c: tuple(int(round(v / f)) for v in c)
+
+    caras = _yunet_detectar(reducir(color))
+    if caras:
+        c = caras[0]
+        izq, der = (a_orig(o) for o in c["ojos"])
+        return Deteccion(caja_orig(c["caja"]), (izq, der), True, "yunet", _alinear(gris, izq, der),
+                         confianza=c["confianza"], nariz=a_orig(c["nariz"]),
+                         boca=tuple(a_orig(b) for b in c["boca"]),
+                         otras=[(caja_orig(o["caja"]), o["confianza"]) for o in caras[1:]])
+
+    peq = reducir(gris)
+    cascada, caja = _caja(peq)
+    (izq, der), detectados = _ojos(peq, caja)
+    if caras is not None and not detectados:
+        # YuNet existe y no ha visto ninguna cara: Haar sin ojos es casi siempre un falso positivo
+        raise CaraNoEncontrada("No se ha detectado ninguna cara")
     izq, der = a_orig(izq), a_orig(der)
-    caja = tuple(int(round(v / f)) for v in caja)
-    return Deteccion(caja, (izq, der), detectados, cascada, _alinear(gris, izq, der))
+    return Deteccion(caja_orig(caja), (izq, der), detectados, cascada, _alinear(gris, izq, der))
 
 
 def alinear_manual(foto: np.ndarray, ojo_izq, ojo_der) -> Deteccion:

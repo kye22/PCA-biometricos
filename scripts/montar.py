@@ -22,7 +22,7 @@ import json
 
 import numpy as np
 
-from sistema import api, bd, comparador, config, dataset, detector, imagen, preprocesado
+from sistema import api, bd, calidad, comparador, config, dataset, detector, imagen, preprocesado
 from sistema.excepciones import CaraNoEncontrada
 from sistema.pca import ModeloPCA
 
@@ -80,6 +80,9 @@ def main():
             else:
                 det = detector.localizar(img)
                 info = f"{det.cascada}, ojos {'detectados' if det.ojos_detectados else 'ESTIMADOS'}"
+                avisos = calidad.problemas(calidad.medir(det))
+                if avisos:   # al inscribir solo se avisa: se inscribe lo que trae el dataset
+                    info += f"  AVISO calidad: {', '.join(avisos)}"
             cara = det.cara
         except (CaraNoEncontrada, ValueError) as e:
             fallos.append((id_, f.name, str(e)))

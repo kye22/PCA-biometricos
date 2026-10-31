@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 from flask import Flask, render_template_string, request
 
-from sistema import analisis, api, bd, comparador, config, imagen
+from sistema import analisis, api, bd, calidad, comparador, config, imagen
 from sistema.excepciones import CaraNoEncontrada, ErrorSistema
 
 app = Flask(__name__)
@@ -52,6 +52,10 @@ def dibujar_deteccion(img: np.ndarray, det) -> np.ndarray:
         cv2.circle(v, (int(ox), int(oy)), grosor * 3, color_ojos, -1)
     (x1, y1), (x2, y2) = det.ojos
     cv2.line(v, (int(x1), int(y1)), (int(x2), int(y2)), color_ojos, grosor)
+    for p in ([det.nariz] if det.nariz else []) + list(det.boca or []):
+        cv2.circle(v, (int(p[0]), int(p[1])), grosor * 2, (255, 160, 60), -1)
+    for (ox, oy, ow, oh), _ in det.otras:     # el resto de caras, en rojo
+        cv2.rectangle(v, (ox, oy), (ox + ow, oy + oh), (60, 60, 230), grosor)
     return v
 
 
@@ -121,13 +125,14 @@ def resultado(datos: bytes, ctx: dict) -> dict:
         "normalizada": a_base64(a_gris_visible(a.cara)),
         "reconstruida": a_base64(a_gris_visible(a.reconstruccion)),
         "misma": misma,
+        "motivos": calidad.mensaje(a.problemas) if a.problemas else "",
         "top": [(c, miniatura(c.id)) for c in a.ranking[:TOP]],
         "dmax": max([c.distancia for c in a.ranking[:TOP]] + [a.umbral * 1.3]),
     }
     if ctx["modo"] == "verificar" and ctx["id_ver"] in bd.cargar():
         d = comparador.distancia_a_id(a.template, bd.cargar()[ctx["id_ver"]])
         posicion = next(n for n, c in enumerate(a.ranking, 1) if c.id == ctx["id_ver"])
-        r["verif"] = {"id": ctx["id_ver"], "d": d, "ok": comparador.acepta(d, a.umbral),
+        r["verif"] = {"id": ctx["id_ver"], "d": d, "ok": comparador.acepta(d, a.umbral) and not a.problemas,
                       "posicion": posicion, "mini": miniatura(ctx["id_ver"])}
     return r
 
@@ -169,8 +174,11 @@ PLANTILLA = """<!doctype html>
 
 {% if r %}{% set a = r.a %}
 <div class="card">
- {% if r.misma %}<p class="aviso">⚠️ Esta es exactamente la foto con la que se inscribió a {{ bonito(r.misma) }}: la distancia ≈ 0 no demuestra nada. Prueba con otra foto suya.</p>{% endif %}
- {% if r.verif %}{% set v = r.verif %}
+ {% if r.misma %}<p class="aviso">Esta es exactamente la foto con la que se inscribió a {{ bonito(r.misma) }}: la distancia ≈ 0 no demuestra nada. Prueba con otra foto suya.</p>{% endif %}
+ {% if a.problemas %}<div class="veredicto no">RECHAZADA POR CALIDAD</div>
+  <p>{{ r.motivos }}. Verificar e identificar no deciden con esta foto.
+   Solo como referencia: el más parecido sería {{ bonito(a.mejor.id) }} (distancia {{ '%.1f'|format(a.mejor.distancia) }}, umbral {{ '%.1f'|format(a.umbral) }}).</p>
+ {% elif r.verif %}{% set v = r.verif %}
   <div class="veredicto {{ 'ok' if v.ok else 'no' }}">{{ 'ACEPTADO' if v.ok else 'RECHAZADO' }} como {{ bonito(v.id) }}</div>
   <p>Distancia a {{ bonito(v.id) }}: <b>{{ '%.1f'|format(v.d) }}</b> (umbral {{ '%.1f'|format(a.umbral) }}) · es el nº {{ v.posicion }} más parecido de {{ ids|length }}.</p>
  {% else %}

@@ -9,11 +9,11 @@ Dos cosas distintas que NO hay que confundir:
 - Confianza relativa: entre los inscritos, cuánto destaca el 1º sobre el resto. Siempre hay un
   1º, incluso para un desconocido, por eso se muestra siempre junto al veredicto.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import api, bd, comparador
+from . import api, bd, calidad, comparador
 from .detector import Deteccion
 
 
@@ -32,8 +32,10 @@ class Analisis:
     template: np.ndarray
     ranking: list[Candidato]
     umbral: float
-    identificado: str | None        # = identificar(foto)
+    identificado: str | None        # = identificar(foto)  (None también si la calidad no basta)
     margen: float                   # (d2 - d1) / d2: 0 = empate con el 2º, 1 = sin rival
+    medidas: "calidad.Medidas | None" = None
+    problemas: list = field(default_factory=list)   # motivos de calidad: si hay, identificar() la rechaza
 
     @property
     def mejor(self) -> Candidato | None:
@@ -60,6 +62,10 @@ def analizar(foto, con_detector: bool = True) -> Analisis:
     ranking = [Candidato(i, d, float(c)) for (i, d), c in zip(rank, conf)]
     margen = float((dists[1] - dists[0]) / dists[1]) if len(dists) > 1 and dists[1] > 0 else 1.0
     identificado = ranking[0].id if ranking and comparador.acepta(ranking[0].distancia, u) else None
+    medidas = calidad.medir(det) if det is not None else None
+    problemas = calidad.problemas(medidas) if medidas else []
+    if problemas:
+        identificado = None   # igual que identificar(): con calidad insuficiente no se decide
 
     return Analisis(det, cara, api._modelo().reconstruir(template), template, ranking, u,
-                    identificado, margen)
+                    identificado, margen, medidas, problemas)
