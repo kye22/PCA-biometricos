@@ -1,8 +1,8 @@
 """Acceso a las fotos en disco.
 
-Inscripción (carpeta plana, formato del profe):  datos/fotos/nombre_apellido_AAAA.ext
+Inscripción (carpeta plana, formato del dataset):  datos/fotos/nombre_apellido_AAAA.ext
     id = nombre del archivo sin el año ni la extensión, en minúsculas y SIN corregir erratas
-    (tiene que coincidir con lo que use el profe). Ej.: serenna_williams_2017.jpg -> serenna_williams
+    (tiene que coincidir con los nombres del dataset). Ej.: serenna_williams_2017.jpg -> serenna_williams
 Extra (Arbeloa y otros nuestros):                 datos/extra/   mismo formato
 Pruebas (anexo, NO se inscriben):                 datos/pruebas/<id>/*.jpg
     Si <id> está inscrito -> pruebas genuinas; si no -> desconocidos (impostores).
@@ -39,7 +39,7 @@ def listar_pruebas(raiz: Path) -> dict[str, list[Path]]:
 
 
 def extraer_dataset(tar: Path, destino: Path) -> int:
-    """Descomprime el .tar.gz del profe dejando las fotos planas en `destino`. -> nº de fotos."""
+    """Descomprime el .tar.gz del dataset dejando las fotos planas en `destino`. -> nº de fotos."""
     destino = Path(destino)
     destino.mkdir(parents=True, exist_ok=True)
     n = 0

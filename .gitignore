@@ -29,3 +29,15 @@ datos/fotos/
 datos/bd.csv
 modelos/*.npz
 datos/inscritos.json
+
+# Material de trabajo local: en GitHub solo va lo imprescindible para instalar y probar
+.github/
+Prácticas.*
+Reconocimiento facial.webp
+ataques/
+docs/
+evaluacion/
+datos/pruebas/
+scripts/descargar_anexo.py
+scripts/hoja_anexo.py
+tests/test_metricas.py

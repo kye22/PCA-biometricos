@@ -5,7 +5,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[2]
 
 # Rutas
-RUTA_DATASET = Path(os.getenv("SISTEMA_DATASET", RAIZ / "Dataset.tar.gz"))  # el del profe
+RUTA_DATASET = Path(os.getenv("SISTEMA_DATASET", RAIZ / "Dataset.tar.gz"))  # el dataset
 RUTA_FOTOS = Path(os.getenv("SISTEMA_FOTOS", RAIZ / "datos" / "fotos"))      # inscripción (plana)
 RUTA_EXTRA = Path(os.getenv("SISTEMA_EXTRA", RAIZ / "datos" / "extra"))      # Arbeloa, etc.
 RUTA_PRUEBAS = Path(os.getenv("SISTEMA_PRUEBAS", RAIZ / "datos" / "pruebas"))  # anexo: <id>/*.jpg

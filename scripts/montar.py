@@ -2,7 +2,7 @@
 
     python scripts/montar.py [--componentes 50] [--far 0.02]
 
-1. Descomprime Dataset.tar.gz (el del profe) en datos/fotos/ si aún no está.
+1. Descomprime Dataset.tar.gz (el dataset) en datos/fotos/ si aún no está.
 2. Junta esas fotos con las de datos/extra/ (Arbeloa) -> ids a partir del nombre de archivo.
 3. Detecta y alinea cada cara; informa de las que fallan.
    Si el id está en datos/ojos_manuales.json se alinea con esos ojos y se inscribe con _sd.

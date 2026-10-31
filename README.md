@@ -1,14 +1,58 @@
 # Reconocimiento facial con PCA — Sistemas Biométricos
 
-Práctica de grupo: sistema de reconocimiento facial basado en **PCA (eigenfaces)** en Python,
-con base de datos en `.csv` y 51 personas inscritas.
+Sistema de reconocimiento facial basado en **PCA (eigenfaces)** en Python, con base de datos en
+`.csv`. Inscribe a 50 personas: las 49 del dataset y Álvaro Arbeloa.
 
-- Enunciado: [`Prácticas.md`](Prácticas.md) (original en `Prácticas.pdf`)
-- **Reporte (cómo funciona PCA, limitaciones y mejoras):** [`docs/REPORTE.md`](docs/REPORTE.md) · [PDF](docs/REPORTE.pdf)
-- **Cómo trabajamos (reparto y ramas):** [`docs/TRABAJO.md`](docs/TRABAJO.md)
-- Decisiones y su porqué: [`docs/decisiones.md`](docs/decisiones.md)
+```
+foto ─► detector (YuNet) ─► alineado por ojos ─► normalización ─► PCA ─► template (50 números)
+                                                                              │
+                                                     comparador (distancia) ◄─┴─► bd.csv
+```
 
-## API
+## Puesta en marcha
+
+Requisitos: Python 3.10 o superior.
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate             # Linux/Mac: source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Copia `Dataset.tar.gz` (el dataset de la práctica, no está en el repo) en la raíz del proyecto y:
+
+```bash
+python scripts/montar.py           # descomprime, detecta y alinea caras, entrena PCA e inscribe a todos
+python app/web.py                  # interfaz web en http://localhost:5000
+```
+
+`montar.py` lista foto por foto cómo ha ido la detección y termina con el umbral calculado.
+Se puede repetir cuando se quiera: rehace el modelo y la BD desde cero.
+
+### Interfaz web
+
+Subes una foto y muestra la detección dibujada (cara y ojos), la cara alineada y normalizada, lo
+que "ve" PCA, el veredicto (identificar, o verificar contra un famoso) y los 5 más parecidos con
+su distancia, el umbral y la confianza relativa.
+
+### Línea de comandos
+
+```bash
+python scripts/identificar.py <foto>
+python scripts/verificar.py <id> <foto>
+```
+
+Ambos aceptan `--sd` (omitir el detector: la foto ya es un recorte de la cara).
+
+### Como librería
+
+```python
+import sys; sys.path.insert(0, "src")        # o: pip install -e .
+from sistema import inscribir, verificar, identificar
+
+identificar("foto.jpg")                       # -> "adele" | None
+verificar("alvaro_arbeloa_coca", "foto.jpg")  # -> True | False
+```
 
 | Entrada | Inscribir | Verificar | Identificar |
 |---|---|---|---|
@@ -16,52 +60,16 @@ con base de datos en `.csv` y 51 personas inscritas.
 | foto sin detector | `inscribir_sd(id, foto)` | `verificar_sd(id, foto)` | `identificar_sd(foto)` |
 | template | `inscribir_t(id, template)` | `verificar_t(id, template)` | `identificar_t(template)` |
 
-`foto` = ruta o array. `verificar*` → `bool`; `identificar*` → id o `None`.
+`foto` puede ser una ruta, los bytes de un archivo o un array. Los ids son el nombre del archivo
+del dataset sin el año (`serenna_williams_2017.jpg` → `serenna_williams`).
 
-## Puesta en marcha (3 comandos)
-
-Necesitas `Dataset.tar.gz` (el del profe, no está en git) en la raíz del repo.
-
-```bash
-pip install -r requirements.txt
-python scripts/montar.py      # descomprime, detecta y alinea caras, entrena PCA, inscribe a todos
-python app/web.py             # interfaz web en http://localhost:5000
-```
-
-`montar.py` lista foto por foto cómo ha ido la detección y termina con el umbral calculado.
-Se puede repetir cuando quieras (rehace modelo y BD desde cero).
-
-### Interfaz web
-
-Subes una foto y muestra: la detección dibujada (cara y ojos), la cara alineada y normalizada,
-la reconstrucción PCA, el veredicto (identificar o verificar contra un famoso) y el ranking de
-los 5 más parecidos con distancia, umbral y confianza relativa.
-
-### Otras formas de usarlo
+## Tests
 
 ```bash
-python scripts/identificar.py <foto> [--sd]
-python scripts/verificar.py <id> <foto> [--sd]
-python evaluacion/evaluar.py   # métricas con el anexo de pruebas datos/pruebas/<id>/*.jpg
-pytest                         # tests (no necesitan fotos)
+pytest
 ```
 
-```python
-import sys; sys.path.insert(0, "src")      # o: pip install -e .
-from sistema import inscribir, verificar, identificar
-identificar("foto.jpg")                     # -> "adele" | None
-```
-
-## Datos
-
-| Ruta | Qué es | ¿En git? |
-|---|---|---|
-| `Dataset.tar.gz` | 49 fotos del profe, 1 por persona | no |
-| `datos/fotos/` | se descomprime ahí (`nombre_apellido_AAAA.ext` → id `nombre_apellido`) | no |
-| `datos/extra/` | nuestras inscripciones (Álvaro Arbeloa), mismo formato | sí |
-| `datos/ojos_manuales.json` | ojos marcados a mano donde el detector falla | sí |
-| `datos/pruebas/<id>/` | anexo de fotos distintas para evaluar (no se inscriben) | sí |
-| `modelos/pca.npz`, `datos/bd.csv` | modelo (+ umbral) y BD generados por `montar.py` | no (de momento) |
+No necesitan fotos: usan caras sintéticas.
 
 ## Docker
 
@@ -70,4 +78,20 @@ docker build -t pca-biometricos .
 docker run --rm -p 5000:5000 pca-biometricos     # monta todo y abre la web en :5000
 ```
 
-Ataques conocidos y defensas previstas: [`ataques/README.md`](ataques/README.md).
+## Qué hay en el repo
+
+| Ruta | Qué es |
+|---|---|
+| `src/sistema/` | la librería: detector, preprocesado, PCA, comparador, BD y los 9 métodos |
+| `app/web.py` | interfaz web |
+| `scripts/` | `montar.py` (todo en un comando), `identificar.py`, `verificar.py` |
+| `modelos/face_detection_yunet_2023mar.onnx` | detector de caras YuNet ([opencv_zoo](https://github.com/opencv/opencv_zoo)) |
+| `datos/extra/` | foto de inscripción de Álvaro Arbeloa |
+| `datos/ojos_manuales.json` | ojos marcados a mano si el detector fallara en alguna foto |
+| `tests/` | pruebas automáticas |
+
+Se generan al ejecutar `montar.py` (no se suben): `datos/fotos/`, `datos/bd.csv`,
+`datos/inscritos.json` y `modelos/pca.npz` (modelo + umbral).
+
+Variables de entorno opcionales: `SISTEMA_DATASET`, `SISTEMA_FOTOS`, `SISTEMA_BD`,
+`SISTEMA_MODELO`, `SISTEMA_UMBRAL`, `SISTEMA_COMPONENTES`.
