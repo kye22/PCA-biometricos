@@ -167,7 +167,8 @@ def fig_distancias(gen, imp, umbral):
     ax.hist(gen, bins=bins, density=True, histtype="step", color=AZUL, linewidth=2.2,
             label=f"Genuina: misma persona, otra foto (n={len(gen)})")
     ax.axvline(umbral, color=TINTA, linewidth=1.3, linestyle="--")
-    tope = ax.get_ylim()[1]
+    tope = ax.get_ylim()[1] * 1.22   # hueco arriba para las etiquetas del umbral
+    ax.set_ylim(0, tope)
     ax.text(umbral - 1.5, tope * 0.96, f"se acepta ←\numbral {umbral:.0f}", fontsize=9, va="top", ha="right")
     acept = np.mean(gen <= umbral) * 100
     ax.text(umbral + 1.5, tope * 0.96, f"solo el {acept:.0f}% de las genuinas\nqueda a la izquierda",

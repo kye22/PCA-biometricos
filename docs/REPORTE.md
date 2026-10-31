@@ -131,6 +131,7 @@ por persona **triplica** el acierto:
 ![Ataque del gemelo](img/06_gemelos.png)
 
 **c) Otros límites de PCA que el rival probará:**
+
 - Edad (Isabel II 1945, Jordi Hurtado 1985), expresión, gafas de sol (Stevie Wonder), perfil.
 - Caras atípicas (Adam Pearson): sigue sin reconocerse con otras fotos.
 - **"Hubs"**: algunas personas (p. ej. *metrika*) atraen muchas fotos ajenas porque su template
