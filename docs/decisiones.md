@@ -76,7 +76,42 @@ Niveles de detalle según distancia interpupilar (IDP): <30 px geometría genera
   Trampas detectadas: gemelos, fotos muy antiguas, gafas de sol, un AVIF con extensión .jpg y un
   WebP con .jpg; el detector Haar falla en Idris Elba, Lady Gaga y Samuel L. Jackson.
   Sin segunda foto por persona no hay evaluación genuina → hay que conseguir fotos extra.
+- **2026-10-31 — Modelo básico (`scripts/montar.py`, un solo comando).**
+  - Lectura con Pillow (formato por contenido + rotación EXIF).
+  - Alineado por ojos (ojos fijos en 30%/70% del ancho, 36% del alto) + máscara elíptica +
+    estandarización → PCA compara caras, no pelo/fondo/luz.
+  - PCA entrenado con las caras inscritas + sus espejos (K=50, ~90% de la varianza). Distancia euclídea.
+  - **Umbral provisional** = percentil 2% de las distancias entre personas distintas (FAR≈2%), guardado
+    dentro de `pca.npz` (modelo y umbral van juntos). No se calibra con copias aumentadas de las
+    fotos inscritas (saldría demasiado estricto).
+  - "Confianza" en la UI = relativa (softmax de distancias); el veredicto lo decide el umbral.
+  - Interfaz web en Flask (`app/web.py`), fuera de `src/` (no es para el rival). Sin opción "sin detector".
+- **2026-10-31 — Detector YuNet** (`modelos/face_detection_yunet_2023mar.onnx`, opencv_zoo) como
+  principal, Haar de respaldo. Detecta las 49 con ojos reales. Se carga desde memoria porque OpenCV no
+  abre rutas con tildes en Windows. `datos/ojos_manuales.json` queda para casos donde falle.
+- **2026-10-31 — Anexo de pruebas** (`scripts/descargar_anexo.py`): Wikimedia Commons, categorías de
+  cada persona (no búsqueda libre), 1 cara clara por foto (YuNet), sin la foto inscrita ni duplicados.
+  Revisado a ojo (`scripts/hoja_anexo.py`): se quitaron dibujos, carteles, un imitador, otra persona y
+  duplicados recortados. ~109 fotos de 44 personas + desconocidos (Oliver Phelps, Ashley Olsen).
+  Sin fotos en Commons: twin melody, esty quesada, eva hache, hasbulla, joe batalan, josie totah,
+  metrika. Autor y licencia en `datos/pruebas/fuentes.csv`.
+- **2026-10-31 — Arbeloa inscrito con la foto que eligió el grupo** (`datos/extra/`). Sus 3 fotos de
+  Commons quedan como pruebas. Con la de Commons inscrita, la del grupo sí se reconocía (d=61.5 <
+  umbral 62.2); al revés, ninguna de Commons se reconoce: mismo límite de PCA.
+- **2026-10-31 — Resultados con el anexo** (1 foto inscrita por persona, 50 inscritos):
+  rank-1 11.4% (azar = 2%), EER 41%, FRR 75% con el umbral provisional. Ashley Olsen entra como
+  Mary-Kate (ataque del gemelo confirmado). Hay "hubs" que atraen muchas fotos (p. ej. metrika).
+  - Variantes (`evaluacion/experimentos.py`: CLAHE, Tan-Triggs, K 30/50/80, quitar 3 primeras
+    eigenfaces, blanqueado, coseno): todas entre 11% y 14% → ±3 fotos, ruido. **El cuello de botella
+    no es el preprocesado**, es PCA con una sola foto por persona en fotos "del mundo real".
+  - Varias fotos inscritas por persona (leave-one-out): rank-1 31–38% (algo optimista: fotos del
+    mismo evento).
+  - **Decisión: se inscribe UNA foto por persona** (la del profe; la del grupo para Arbeloa), fiel al
+    dataset del enunciado. Inscribir más fotos queda como mejora medida, no aplicada.
+  - Las cifras con umbral elegido sobre el mismo anexo son algo optimistas.
 
+## 4. Preguntas abiertas
 
-- ¿Formato final: notebook, paquete Python, o ambos?
-- ¿Cuántas fotos por persona dará el docente (afecta a LDA/PCA y a la evaluación)?
+- ¿El enunciado dice 51 inscritos y el dataset trae 49 (+ Arbeloa = 50)? Confirmar con el profe.
+- ¿Subimos `modelos/pca.npz` y `datos/bd.csv` al repo para el rival, o que lo genere con `montar.py`?
+- ¿Defensas a implementar (firma HMAC del CSV, cifrado / templates cancelables)? Ver `ataques/README.md`.
