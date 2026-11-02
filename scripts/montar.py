@@ -1,12 +1,14 @@
 """Monta el sistema completo con un solo comando:
 
-    python scripts/montar.py [--componentes 50] [--far 0.02]
+    python scripts/montar.py [--far 0.02]
 
 1. Descomprime Dataset.tar.gz (el dataset) en datos/fotos/ si aún no está.
 2. Junta esas fotos con las de datos/extra/ (Arbeloa) -> ids a partir del nombre de archivo.
 3. Detecta y alinea cada cara; informa de las que fallan.
    Si el id está en datos/ojos_manuales.json se alinea con esos ojos y se inscribe con _sd.
-4. Entrena PCA con esas caras (+ sus espejos, para tener más variedad).
+4. Carga el extractor PCA genérico (modelos/pca_base.npz), entrenado con miles de caras de una
+   base diversa (scripts/entrenar_pca.py). NO se entrena con los inscritos: la BD solo guarda a
+   quien tiene acceso. (Si faltara pca_base.npz, entrena con los inscritos como último recurso.)
 5. Inscribe a todos en una BD nueva (datos/bd.csv) con la API normal.
 6. Calcula un umbral PROVISIONAL a partir de las distancias entre personas distintas y lo
    guarda dentro del modelo.
@@ -92,13 +94,19 @@ def main():
         caras.append(preprocesado.normalizar(cara))
         print(f"  ok    {f.name:48s} {info}")
 
-    # --- 4. entrenamiento ---------------------------------------------------------
-    entrenamiento = np.stack(caras + [c[:, ::-1] for c in caras])   # + espejos
-    modelo = ModeloPCA.entrenar(entrenamiento, args.componentes)
+    # --- 4. extractor -----------------------------------------------------------------
+    if config.RUTA_MODELO_BASE.exists():
+        modelo = ModeloPCA.cargar(config.RUTA_MODELO_BASE)
+        print(f"\nPCA genérico ({config.RUTA_MODELO_BASE.name}): K={modelo.dim} eigenfaces "
+              f"({modelo.varianza_explicada():.0%} de la varianza de su base de entrenamiento)")
+    else:
+        entrenamiento = np.stack(caras + [c[:, ::-1] for c in caras])   # + espejos
+        modelo = ModeloPCA.entrenar(entrenamiento, args.componentes)
+        print(f"\nAVISO: falta {config.RUTA_MODELO_BASE.name}; PCA entrenado con los propios inscritos "
+              f"({len(entrenamiento)} caras, K={modelo.dim}). Peor: ver scripts/entrenar_pca.py")
+    modelo.umbral = None
     modelo.guardar(config.RUTA_MODELO)
     api.recargar()
-    print(f"\nPCA: {len(entrenamiento)} caras de entrenamiento -> K={modelo.dim} eigenfaces "
-          f"({modelo.varianza_explicada():.0%} de la varianza)")
 
     # --- 5. inscripción -------------------------------------------------------------
     bd.borrar()

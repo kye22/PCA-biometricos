@@ -28,6 +28,8 @@ desktop.ini
 datos/fotos/
 datos/bd.csv
 modelos/*.npz
+!modelos/pca_base.npz
+datos/base_generica/
 datos/inscritos.json
 
 # Material de trabajo local: en GitHub solo va lo imprescindible para instalar y probar

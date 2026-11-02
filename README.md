@@ -63,6 +63,18 @@ verificar("alvaro_arbeloa_coca", "foto.jpg")  # -> True | False
 `foto` puede ser una ruta, los bytes de un archivo o un array. Los ids son el nombre del archivo
 del dataset sin el año (`serenna_williams_2017.jpg` → `serenna_williams`).
 
+## Extractor PCA genérico
+
+El extractor **no se entrena con las personas inscritas**. `modelos/pca_base.npz` (en el repo) es
+un PCA de 100 eigenfaces entrenado una vez con 6.300 caras de
+[FairFace](https://github.com/joojs/fairface) (Kärkkäinen y Joo, 2021; CC BY 4.0): **900 por cada uno
+de sus 7 grupos étnicos**, para que ningún grupo quede infrarrepresentado. La BD (`bd.csv`) solo
+guarda a quien tiene acceso, e inscribir a alguien no cambia el modelo.
+
+Para regenerarlo (no hace falta): descarga el split de validación de FairFace indicado en
+`scripts/entrenar_pca.py` en `datos/base_generica/`, `pip install pyarrow` y
+`python scripts/entrenar_pca.py --por-grupo 900 --componentes 100`.
+
 ## Control de calidad
 
 `verificar()` e `identificar()` rechazan la foto (excepción `CalidadInsuficiente`, con los motivos)
@@ -104,6 +116,7 @@ docker run --rm -p 5000:5000 pca-biometricos     # monta todo y abre la web en :
 | `app/web.py` | interfaz web |
 | `scripts/` | `montar.py` (todo en un comando), `identificar.py`, `verificar.py` |
 | `modelos/face_detection_yunet_2023mar.onnx` | detector de caras YuNet ([opencv_zoo](https://github.com/opencv/opencv_zoo)) |
+| `modelos/pca_base.npz` | extractor PCA genérico (ver arriba) |
 | `datos/extra/` | foto de inscripción de Álvaro Arbeloa |
 | `datos/ojos_manuales.json` | ojos marcados a mano si el detector fallara en alguna foto |
 | `tests/` | pruebas automáticas |
