@@ -77,10 +77,15 @@ def separar(grupo: np.ndarray, por_grupo: int):
 
 
 def entrenar(caras: np.ndarray, componentes: int) -> ModeloPCA:
+    """caras alineadas (uint8) -> PCA sobre sus versiones normalizadas."""
+    return entrenar_normalizadas(np.stack([preprocesado.normalizar(c) for c in caras]), componentes)
+
+
+def entrenar_normalizadas(normalizadas: np.ndarray, componentes: int) -> ModeloPCA:
     """PCA por SVD aleatorizado (Halko, Martinsson y Tropp, 2011): mismo resultado que el SVD
     completo para las K primeras componentes, sin calcular las ~10.000 que no se usan."""
-    forma = caras.shape[1:]
-    X = np.stack([preprocesado.normalizar(c).reshape(-1) for c in caras]).astype(np.float32)
+    forma = normalizadas.shape[1:]
+    X = normalizadas.reshape(len(normalizadas), -1).astype(np.float32)
     media = X.mean(axis=0)
     X -= media
     rng = np.random.default_rng(SEMILLA)

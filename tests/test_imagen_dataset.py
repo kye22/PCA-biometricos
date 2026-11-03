@@ -45,3 +45,11 @@ def test_extraer_dataset_plano_y_sin_rutas_raras(tmp_path):
     assert sorted(p.name for p in (tmp_path / "fotos").iterdir()) == ["ana_2020.png", "fuera_2020.png"]
     assert not (tmp_path / "fuera_2020.png").exists()
     assert [i for i, _ in dataset.listar_inscripcion(tmp_path / "fotos")] == ["ana", "fuera"]
+
+
+def test_inscripcion_con_varias_fotos_por_persona(tmp_path):
+    (tmp_path / "ana_2020.png").write_bytes(_png())
+    (tmp_path / "ana").mkdir()
+    (tmp_path / "ana" / "01.png").write_bytes(_png())
+    (tmp_path / "ana" / "02.png").write_bytes(_png())
+    assert [i for i, _ in dataset.listar_inscripcion(tmp_path)] == ["ana", "ana", "ana"]

@@ -4,6 +4,7 @@ Inscripción (carpeta plana, formato del dataset):  datos/fotos/nombre_apellido_
     id = nombre del archivo sin el año ni la extensión, en minúsculas y SIN corregir erratas
     (tiene que coincidir con los nombres del dataset). Ej.: serenna_williams_2017.jpg -> serenna_williams
 Extra (Arbeloa y otros nuestros):                 datos/extra/   mismo formato
+Fotos adicionales de un inscrito:                 datos/extra/<id>/*.jpg (varios templates por persona)
 Pruebas (anexo, NO se inscriben):                 datos/pruebas/<id>/*.jpg
     Si <id> está inscrito -> pruebas genuinas; si no -> desconocidos (impostores).
 """
@@ -26,8 +27,17 @@ def _fotos(carpeta: Path) -> list[Path]:
 
 
 def listar_inscripcion(*carpetas: Path) -> list[tuple[str, Path]]:
-    """[(id, foto), ...] de las carpetas planas de inscripción, en orden estable."""
-    return [(id_desde_archivo(f), f) for c in carpetas for f in _fotos(Path(c))]
+    """[(id, foto), ...] de las carpetas de inscripción, en orden estable.
+
+    Fotos sueltas: el id sale del nombre del archivo. Subcarpetas <id>/: fotos adicionales de esa
+    persona (se inscriben todas; la persona queda con varios templates)."""
+    pares = []
+    for c in map(Path, carpetas):
+        pares += [(id_desde_archivo(f), f) for f in _fotos(c)]
+        if c.exists():
+            for d in sorted(x for x in c.iterdir() if x.is_dir()):
+                pares += [(d.name.lower(), f) for f in _fotos(d)]
+    return pares
 
 
 def listar_pruebas(raiz: Path) -> dict[str, list[Path]]:

@@ -1,7 +1,7 @@
 # Reconocimiento facial con PCA — Sistemas Biométricos
 
 Sistema de reconocimiento facial basado en **PCA (eigenfaces)** en Python, con base de datos en
-`.csv`. Inscribe a 50 personas: las 49 del dataset y Álvaro Arbeloa.
+`.csv`. Inscribe a 50 personas: las 49 del dataset y Álvaro Arbeloa, con hasta 3 fotos por persona.
 
 ```
 foto ─► detector (YuNet) ─► control de calidad ─► alineado ─► normalización ─► PCA ─► template
@@ -117,7 +117,7 @@ docker run --rm -p 5000:5000 pca-biometricos     # monta todo y abre la web en :
 | `scripts/` | `montar.py` (todo en un comando), `identificar.py`, `verificar.py` |
 | `modelos/face_detection_yunet_2023mar.onnx` | detector de caras YuNet ([opencv_zoo](https://github.com/opencv/opencv_zoo)) |
 | `modelos/pca_base.npz` | extractor PCA genérico (ver arriba) |
-| `datos/extra/` | foto de inscripción de Álvaro Arbeloa |
+| `datos/extra/` | foto de inscripción de Álvaro Arbeloa y, en `datos/extra/<id>/`, fotos adicionales de inscritos (Wikimedia Commons; autor y licencia en `fuentes.csv`) |
 | `datos/ojos_manuales.json` | ojos marcados a mano si el detector fallara en alguna foto |
 | `tests/` | pruebas automáticas |
 
