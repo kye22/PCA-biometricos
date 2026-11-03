@@ -6,5 +6,7 @@ venv
 .env
 datos/fotos
 datos/bd.csv
+datos/bd.firma
+datos/clave.key
 datos/inscritos.json
 modelos/*.npz

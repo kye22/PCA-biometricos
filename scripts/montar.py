@@ -7,11 +7,12 @@
 3. Detecta y alinea cada cara; informa de las que fallan.
    Si el id está en datos/ojos_manuales.json se alinea con esos ojos y se inscribe con _sd.
 4. Carga el extractor PCA genérico (modelos/pca_base.npz), entrenado con miles de caras de una
-   base diversa (scripts/entrenar_pca.py). NO se entrena con los inscritos: la BD solo guarda a
-   quien tiene acceso. (Si faltara pca_base.npz, entrena con los inscritos como último recurso.)
-5. Inscribe a todos en una BD nueva (datos/bd.csv) con la API normal.
+   base diversa (scripts/entrenar_pca.py), y comprueba que es el que está fijado en el código.
+   NO se entrena con los inscritos: la BD solo guarda a quien tiene acceso.
+5. Crea la clave secreta si no existe (datos/clave.key, fuera de git) e inscribe a todos en una
+   BD nueva (datos/bd.csv, cifrada y firmada) con la API normal.
 6. Calcula un umbral PROVISIONAL a partir de las distancias entre personas distintas y lo
-   guarda dentro del modelo.
+   guarda dentro del modelo (pca.npz, firmado con la clave).
 """
 import sys
 from pathlib import Path
@@ -24,7 +25,7 @@ import json
 
 import numpy as np
 
-from sistema import api, bd, calidad, comparador, config, dataset, detector, imagen, preprocesado
+from sistema import api, bd, calidad, comparador, config, dataset, detector, imagen, preprocesado, seguridad
 from sistema.excepciones import CaraNoEncontrada
 from sistema.pca import ModeloPCA
 
@@ -65,6 +66,8 @@ def main():
     p.add_argument("--componentes", type=int, default=config.N_COMPONENTES)
     p.add_argument("--far", type=float, default=0.02,
                    help="fracción de impostores que se aceptaría con el umbral (por defecto 2%%)")
+    p.add_argument("--umbral", type=float, default=None,
+                   help="fijar el umbral a mano (p. ej. 0.45, el calibrado con evaluacion/calibrar_umbral.py)")
     args = p.parse_args()
 
     fotos = preparar_fotos()
@@ -97,6 +100,9 @@ def main():
     # --- 4. extractor -----------------------------------------------------------------
     if config.RUTA_MODELO_BASE.exists():
         modelo = ModeloPCA.cargar(config.RUTA_MODELO_BASE)
+        if modelo.huella() != config.HUELLA_MODELO_BASE:
+            sys.exit(f"{config.RUTA_MODELO_BASE.name} no es el del repositorio (huella distinta). "
+                     "Si lo has reentrenado tú, actualiza config.HUELLA_MODELO_BASE.")
         print(f"\nPCA genérico ({config.RUTA_MODELO_BASE.name}): K={modelo.dim} eigenfaces "
               f"({modelo.varianza_explicada():.0%} de la varianza de su base de entrenamiento)")
     else:
@@ -104,8 +110,11 @@ def main():
         modelo = ModeloPCA.entrenar(entrenamiento, args.componentes)
         print(f"\nAVISO: falta {config.RUTA_MODELO_BASE.name}; PCA entrenado con los propios inscritos "
               f"({len(entrenamiento)} caras, K={modelo.dim}). Peor: ver scripts/entrenar_pca.py")
+    if seguridad.crear_clave():
+        print(f"Clave nueva en {config.RUTA_CLAVE} (secreta: no va en git; sin ella la BD no se puede leer)")
+    api.recargar()
     modelo.umbral = None
-    modelo.guardar(config.RUTA_MODELO)
+    modelo.guardar(config.RUTA_MODELO, seguridad.clave_modelo())
     api.recargar()
 
     # --- 5. inscripción -------------------------------------------------------------
@@ -127,15 +136,18 @@ def main():
     ids = sorted(base)
     impostoras = [comparador.distancia_a_id(base[a][0], base[b])
                   for i, a in enumerate(ids) for b in ids[i + 1:]]
-    modelo.umbral = float(np.quantile(impostoras, args.far))
-    modelo.guardar(config.RUTA_MODELO)
+    modelo.umbral = args.umbral if args.umbral is not None else float(np.quantile(impostoras, args.far))
+    modelo.guardar(config.RUTA_MODELO, seguridad.clave_modelo())
     api.recargar()
 
     print(f"\nInscritos: {len(base)} personas -> {config.RUTA_BD}")
-    print(f"Distancias entre personas distintas: mín {min(impostoras):.1f}, "
-          f"mediana {np.median(impostoras):.1f}, máx {max(impostoras):.1f}")
-    print(f"Umbral PROVISIONAL = {modelo.umbral:.2f} (acepta al {args.far:.0%} de los pares de "
-          f"impostores; el falso rechazo se mide con fotos distintas de las inscritas)")
+    print(f"Distancias entre personas distintas: mín {min(impostoras):.3f}, "
+          f"mediana {np.median(impostoras):.3f}, máx {max(impostoras):.3f}")
+    if args.umbral is not None:
+        print(f"Umbral = {modelo.umbral:.3f} (fijado con --umbral)")
+    else:
+        print(f"Umbral PROVISIONAL = {modelo.umbral:.3f} (acepta al {args.far:.0%} de los pares de "
+              f"impostores; el falso rechazo se mide con fotos distintas de las inscritas)")
     if fallos:
         print(f"\nNO inscritos ({len(fallos)}): " + ", ".join(i for i, _, _ in fallos))
         print(f"  -> para inscribirlos, marca sus ojos en {RUTA_OJOS_MANUALES.name}")

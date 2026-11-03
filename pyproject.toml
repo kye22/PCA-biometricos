@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=1.24",
     "opencv-python-headless>=4.8",
     "pillow>=11.3",   # lee AVIF (hay uno en el dataset con extensión .jpg)
+    "cryptography>=41",   # AES-GCM para cifrar los templates de la BD
 ]
 
 [project.optional-dependencies]

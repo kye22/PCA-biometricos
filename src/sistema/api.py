@@ -11,24 +11,40 @@ verificar* -> bool. identificar* -> id del más cercano, o None si ninguno pasa 
 Control de calidad (calidad.py): verificar() e identificar() lanzan CalidadInsuficiente si la foto
 tiene varias caras, una cara muy pequeña o girada, o los ojos/la boca tapados. inscribir() no lo
 aplica (se inscribe lo que da el dataset; montar.py avisa) y los _sd no pueden (no hay detección).
+
+Defensas de entrada (límites medidos en la base de entrenamiento y guardados con el modelo):
+- _sd (y verificar/identificar): NoPareceCara si PCA no puede explicar la imagen (error de
+  reconstrucción alto): ruido, texturas, tableros...
+- verificar_sd / identificar_sd: además, NoPareceCara si YuNet no ve una cara en el recorte
+  (degradados y texturas suaves que PCA sí "explica"). inscribir_sd no lo exige: lo usa quien
+  administra el sistema, p. ej. con ojos marcados a mano cuando el detector falla.
+- todos los caminos, incluido _t: TemplateInvalido si la norma del template es imposible para
+  una cara real (p. ej. ceros = "la cara media", o valores extremos).
+- inscribir*: IdInvalido si el id no es texto simple (evita inyección de fórmulas en el .csv).
+El modelo se carga comprobando su firma y la BD va cifrada y firmada (seguridad.py, bd.py).
 """
+import re
 from functools import lru_cache
 
 import numpy as np
 
-from . import bd, calidad, comparador, config, detector, imagen, preprocesado
-from .excepciones import IdDesconocido, TemplateInvalido
+from . import bd, calidad, comparador, config, detector, imagen, preprocesado, seguridad
+from .excepciones import IdDesconocido, IdInvalido, NoPareceCara, TemplateInvalido
 from .pca import ModeloPCA
 
 
 @lru_cache(maxsize=1)
 def _modelo() -> ModeloPCA:
-    return ModeloPCA.cargar(config.RUTA_MODELO)
+    return ModeloPCA.cargar(config.RUTA_MODELO, seguridad.clave_modelo())
 
 
 def recargar() -> None:
-    """Olvida el modelo en memoria (p. ej. tras reentrenar)."""
+    """Olvida el modelo y la clave en memoria (p. ej. tras reentrenar)."""
     _modelo.cache_clear()
+    seguridad.olvidar_clave()
+
+
+_ID = re.compile(r"^\w[\w().\-]{0,79}$")
 
 
 def umbral() -> float:
@@ -42,12 +58,17 @@ def umbral() -> float:
 
 def extraer(foto, con_detector: bool, control: bool = False):
     """foto -> (template, deteccion | None, cara_normalizada).
-    control=True aplica el control de calidad (solo tiene efecto con detector)."""
+    control=True: con detector, control de calidad; sin detector, que YuNet vea una cara."""
     img = imagen.leer(foto)
     det = detector.localizar(img) if con_detector else None
     if det is not None and control:
         calidad.exigir(det)
+    if det is None and control and detector.parece_cara(img) is False:
+        raise NoPareceCara("La imagen no parece una cara (el detector no ve ninguna en el recorte)")
     cara = preprocesado.normalizar(det.cara if det else img)
+    maximo = _modelo().limites.get("residuo_max")
+    if maximo is not None and (det is None or control) and _modelo().residuo(cara) > maximo:
+        raise NoPareceCara("La imagen no se parece a una cara alineada (PCA no la puede representar)")
     return _modelo().extraer(cara), det, cara
 
 
@@ -56,15 +77,24 @@ def _template_desde_foto(foto, con_detector: bool, control: bool = False) -> np.
 
 
 def validar(template) -> np.ndarray:
-    t = np.asarray(template, dtype=np.float32).reshape(-1)
+    try:
+        t = np.asarray(template, dtype=np.float32).reshape(-1)
+    except (TypeError, ValueError) as e:
+        raise TemplateInvalido("El template no es un vector de números") from e
     if t.shape[0] != _modelo().dim or not np.all(np.isfinite(t)):
         raise TemplateInvalido(f"Se esperaba un vector finito de longitud {_modelo().dim}")
+    lim = _modelo().limites
+    norma = float(np.linalg.norm(t))
+    if not lim.get("norma_min", 0.0) <= norma <= lim.get("norma_max", np.inf) or norma == 0:
+        raise TemplateInvalido(f"Template imposible para una cara real (norma {norma:.2f})")
     return t
 
 
 # --- núcleo común: todo acaba aquí --------------------------------------------
 
 def inscribir_t(id: str, template) -> None:
+    if not isinstance(id, str) or not _ID.match(id):
+        raise IdInvalido(f"Id no válido: {id!r} (solo letras, números y _ ( ) . -)")
     bd.guardar(id, validar(template))
 
 
@@ -92,11 +122,11 @@ def inscribir_sd(id: str, foto) -> None:
 
 
 def verificar_sd(id: str, foto) -> bool:
-    return verificar_t(id, _template_desde_foto(foto, con_detector=False))
+    return verificar_t(id, _template_desde_foto(foto, con_detector=False, control=True))
 
 
 def identificar_sd(foto) -> str | None:
-    return identificar_t(_template_desde_foto(foto, con_detector=False))
+    return identificar_t(_template_desde_foto(foto, con_detector=False, control=True))
 
 
 # --- pipeline completo ------------------------------------------------------------

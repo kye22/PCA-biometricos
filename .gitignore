@@ -27,6 +27,8 @@ desktop.ini
 *.tar.gz
 datos/fotos/
 datos/bd.csv
+datos/bd.firma
+datos/clave.key
 modelos/*.npz
 !modelos/pca_base.npz
 datos/base_generica/

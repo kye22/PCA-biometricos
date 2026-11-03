@@ -27,3 +27,19 @@ class CalidadInsuficiente(ErrorSistema):
     def __init__(self, motivos: list[str], mensaje: str = ""):
         super().__init__(mensaje or ", ".join(motivos))
         self.motivos = motivos
+
+
+class NoPareceCara(CaraNoEncontrada):
+    """La imagen (sin detector, _sd) está demasiado lejos del espacio de caras de PCA."""
+
+
+class IdInvalido(ErrorSistema):
+    """El id tiene caracteres no permitidos."""
+
+
+class ClaveNoEncontrada(ErrorSistema):
+    """Falta la clave secreta (datos/clave.key o SISTEMA_CLAVE): ejecutar scripts/montar.py."""
+
+
+class Manipulado(ErrorSistema):
+    """La BD o el modelo no pasan la comprobación de firma: alguien los ha modificado."""

@@ -10,7 +10,7 @@ from conftest import cara_sintetica
 
 @pytest.fixture
 def inscritos(entorno, monkeypatch):
-    monkeypatch.setattr(config, "UMBRAL", 15.0)  # genuinas ~3, impostoras ~40
+    monkeypatch.setattr(config, "UMBRAL", 0.3)  # coseno: genuinas ~0.05, impostoras ~1
     for p in range(3):
         api.inscribir_sd(f"persona{p}", cara_sintetica(p, 0))
     return entorno

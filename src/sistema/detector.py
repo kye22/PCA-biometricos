@@ -70,6 +70,28 @@ def _yunet_detectar(color: np.ndarray) -> list[dict] | None:
     return sorted(salida, key=lambda d: d["caja"][2] * d["caja"][3], reverse=True)
 
 
+def parece_cara(recorte: np.ndarray, minimo: float = 0.3) -> bool | None:
+    """Para los _sd: ¿YuNet ve una cara en este recorte ya alineado? None si no hay YuNet.
+
+    Se le añade un margen (YuNet espera ver algo de contorno) y se amplía a 200 px. Con caras
+    reales alineadas acierta en el 98 % de los inscritos y el 92 % de FairFace (fotos de poca
+    resolución); con degradados, texturas y ruido, en el 0 % (evaluacion/medir_defensas.py)."""
+    detector = _yunet()
+    if detector is None:
+        return None
+    g = recorte if recorte.ndim == 2 else cv2.cvtColor(recorte, cv2.COLOR_BGR2GRAY)
+    g = g.astype(np.uint8)
+    p = int(0.2 * max(g.shape))
+    g = cv2.resize(cv2.copyMakeBorder(g, p, p, p, p, cv2.BORDER_CONSTANT, value=int(np.median(g))), (200, 200))
+    detector.setInputSize((200, 200))
+    detector.setScoreThreshold(minimo)
+    try:
+        _, caras = detector.detect(cv2.cvtColor(g, cv2.COLOR_GRAY2BGR))
+    finally:
+        detector.setScoreThreshold(UMBRAL_YUNET)
+    return caras is not None and len(caras) > 0
+
+
 def _iou(a, b) -> float:
     ax, ay, aw, ah = a
     bx, by, bw, bh = b

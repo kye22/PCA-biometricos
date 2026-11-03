@@ -1,6 +1,6 @@
 """Entrena el extractor PCA con una base GENÉRICA y diversa (no con las personas inscritas).
 
-    python scripts/entrenar_pca.py [--por-grupo 1000] [--componentes 100]
+    python scripts/entrenar_pca.py [--por-grupo 900] [--componentes 50]
 
 El extractor se entrena una vez con miles de caras de gente que no tiene por qué estar en el
 sistema; la BD (bd.csv) solo guarda los templates de quien tiene acceso. Así:
@@ -18,6 +18,10 @@ grupos étnicos con etiquetas, licencia CC BY 4.0. Archivo (63 MB, no va en git)
 Se descartan menores de 10 años, se reservan RESERVA_POR_GRUPO caras por grupo para medir el
 sesgo (nunca se entrena con ellas) y se toman hasta --por-grupo caras por grupo para entrenar.
 Todas pasan por la misma cadena que las fotos del sistema (YuNet, alineado, normalización).
+
+Con las caras reservadas se miden también los límites de "cara normal" que usa api.py para
+rechazar entradas fabricadas: norma del template (entre 0,9 x percentil 0,1 y 1,25 x percentil
+99,9) y error de reconstrucción (hasta 1,15 x percentil 99,9).
 Resultado: modelos/pca_base.npz, que sí va en git (montar.py lo usa y ya no entrena).
 """
 import sys
@@ -101,19 +105,32 @@ def entrenar_normalizadas(normalizadas: np.ndarray, componentes: int) -> ModeloP
                      tuple(forma), varianza_total=float((X ** 2).sum() / n))
 
 
+def limites(modelo: ModeloPCA, caras: np.ndarray) -> dict:
+    """Rango de la norma del template y del error de reconstrucción en caras reales no vistas."""
+    normalizadas = [preprocesado.normalizar(c) for c in caras]
+    normas = np.array([np.linalg.norm(modelo.extraer(c)) for c in normalizadas])
+    residuos = np.array([modelo.residuo(c) for c in normalizadas])
+    return {"norma_min": 0.9 * float(np.quantile(normas, 0.001)),
+            "norma_max": 1.25 * float(np.quantile(normas, 0.999)),
+            "residuo_max": 1.15 * float(np.quantile(residuos, 0.999))}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--por-grupo", type=int, default=1000)
+    p.add_argument("--por-grupo", type=int, default=900)
     p.add_argument("--componentes", type=int, default=config.N_COMPONENTES)
     args = p.parse_args()
 
     caras, grupo = caras_fairface()
-    entreno, _ = separar(grupo, args.por_grupo)
+    entreno, reserva = separar(grupo, args.por_grupo)
     cuenta = {GRUPOS[g]: int((grupo[entreno] == g).sum()) for g in range(len(GRUPOS))}
     modelo = entrenar(caras[entreno], args.componentes)
+    modelo.limites = limites(modelo, caras[reserva])
     modelo.guardar(config.RUTA_MODELO_BASE)
     print(f"Entrenado con {len(entreno)} caras: {cuenta}")
     print(f"K={modelo.dim} eigenfaces ({modelo.varianza_explicada():.0%} de la varianza) -> {config.RUTA_MODELO_BASE}")
+    print("Límites de cara normal: " + ", ".join(f"{k} {v:.3f}" for k, v in modelo.limites.items()))
+    print(f"Huella (copiar en config.HUELLA_MODELO_BASE): {modelo.huella()}")
 
 
 if __name__ == "__main__":

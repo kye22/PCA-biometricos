@@ -5,12 +5,17 @@
 Muestra la detección dibujada sobre la foto, la cara alineada, lo que "ve" PCA, el veredicto
 (con el umbral) y el ranking de los famosos más parecidos con su confianza relativa.
 No forma parte de lo que se entrega al rival (eso es la librería); es para nosotros y la exposición.
+Ojo: enseña distancias y ranking, que es justo lo que necesita un ataque de "hill-climbing"
+(retocar la foto poco a poco hasta que pase). Por eso limita los análisis por cliente
+(MAX_ANALISIS por minuto); en un despliegue real solo se devolvería sí/no.
 """
 import base64
 import hashlib
 import json
 import os
 import sys
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # usar sin instalar
@@ -25,6 +30,16 @@ from sistema.excepciones import CaraNoEncontrada, ErrorSistema
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 TOP = 5
+MAX_ANALISIS = int(os.getenv("MAX_ANALISIS", 20))   # por cliente y minuto
+_intentos: dict[str, deque] = defaultdict(deque)
+
+
+def demasiados(cliente: str) -> bool:
+    ahora, cola = time.monotonic(), _intentos[cliente]
+    while cola and ahora - cola[0] > 60:
+        cola.popleft()
+    cola.append(ahora)
+    return len(cola) > MAX_ANALISIS
 
 
 # --- utilidades de imagen ------------------------------------------------------------
@@ -101,6 +116,9 @@ def inicio():
         return render_template_string(PLANTILLA, **ctx)
 
     if request.method == "POST" and request.files.get("foto"):
+        if demasiados(request.remote_addr or "?"):
+            ctx["error"] = f"Demasiados intentos (máximo {MAX_ANALISIS} por minuto). Espera un poco."
+            return render_template_string(PLANTILLA, **ctx), 429
         datos = request.files["foto"].read()
         try:
             ctx["r"] = resultado(datos, ctx)
@@ -177,15 +195,15 @@ PLANTILLA = """<!doctype html>
  {% if r.misma %}<p class="aviso">Esta es exactamente la foto con la que se inscribió a {{ bonito(r.misma) }}: la distancia ≈ 0 no demuestra nada. Prueba con otra foto suya.</p>{% endif %}
  {% if a.problemas %}<div class="veredicto no">RECHAZADA POR CALIDAD</div>
   <p>{{ r.motivos }}. Verificar e identificar no deciden con esta foto.
-   Solo como referencia: el más parecido sería {{ bonito(a.mejor.id) }} (distancia {{ '%.1f'|format(a.mejor.distancia) }}, umbral {{ '%.1f'|format(a.umbral) }}).</p>
+   Solo como referencia: el más parecido sería {{ bonito(a.mejor.id) }} (distancia {{ '%.3f'|format(a.mejor.distancia) }}, umbral {{ '%.3f'|format(a.umbral) }}).</p>
  {% elif r.verif %}{% set v = r.verif %}
   <div class="veredicto {{ 'ok' if v.ok else 'no' }}">{{ 'ACEPTADO' if v.ok else 'RECHAZADO' }} como {{ bonito(v.id) }}</div>
-  <p>Distancia a {{ bonito(v.id) }}: <b>{{ '%.1f'|format(v.d) }}</b> (umbral {{ '%.1f'|format(a.umbral) }}) · es el nº {{ v.posicion }} más parecido de {{ ids|length }}.</p>
+  <p>Distancia a {{ bonito(v.id) }}: <b>{{ '%.3f'|format(v.d) }}</b> (umbral {{ '%.3f'|format(a.umbral) }}) · es el nº {{ v.posicion }} más parecido de {{ ids|length }}.</p>
  {% else %}
   {% if a.identificado %}<div class="veredicto ok">IDENTIFICADO: {{ bonito(a.identificado) }}</div>
   {% else %}<div class="veredicto no">DESCONOCIDO</div>
    <p>Nadie está por debajo del umbral. El más parecido sería {{ bonito(a.mejor.id) }}, pero no lo bastante.</p>{% endif %}
-  <p>Distancia al más cercano: <b>{{ '%.1f'|format(a.mejor.distancia) }}</b> · umbral {{ '%.1f'|format(a.umbral) }} (provisional)
+  <p>Distancia al más cercano: <b>{{ '%.3f'|format(a.mejor.distancia) }}</b> · umbral {{ '%.3f'|format(a.umbral) }} (provisional)
    · confianza relativa {{ '%.0f'|format(a.mejor.confianza*100) }}% · margen sobre el 2º {{ '%.0f'|format(a.margen*100) }}%</p>
  {% endif %}
 </div>
@@ -202,11 +220,11 @@ PLANTILLA = """<!doctype html>
  <table><tr><th>#</th><th></th><th>Famoso</th><th>Distancia</th><th>vs. umbral (línea)</th><th>Confianza relativa</th></tr>
  {% for c, mini in r.top %}<tr>
   <td>{{ loop.index }}</td><td>{% if mini %}<img class="mini" src="data:image/jpeg;base64,{{ mini }}">{% endif %}</td>
-  <td>{{ bonito(c.id) }}</td><td>{{ '%.1f'|format(c.distancia) }}</td>
+  <td>{{ bonito(c.id) }}</td><td>{{ '%.3f'|format(c.distancia) }}</td>
   <td><div class="barra"><span style="width:{{ (100*c.distancia/r.dmax)|round }}%;background:{{ 'var(--ok)' if c.distancia<=a.umbral else 'var(--no)' }}"></span><i style="left:{{ (100*a.umbral/r.dmax)|round }}%"></i></div></td>
   <td>{{ '%.1f'|format(c.confianza*100) }}%</td></tr>{% endfor %}
  </table>
- <p class="sub">Distancia: euclídea entre templates PCA (menor = más parecido). Se acepta si queda a la izquierda de la línea (umbral).
+ <p class="sub">Distancia: coseno entre templates PCA blanqueados (de 0 a 2; menor = más parecido). Se acepta si queda a la izquierda de la línea (umbral).
  La <b>confianza relativa</b> reparte el 100% entre los {{ ids|length }} inscritos según lo cerca que está cada uno: siempre hay un favorito,
  incluso con un desconocido, por eso lo que decide es el umbral, no este porcentaje.</p>
 </div>

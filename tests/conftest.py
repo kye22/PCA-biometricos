@@ -5,8 +5,20 @@ Los tests no necesitan fotos reales: cada "persona" es un patrón aleatorio fijo
 import numpy as np
 import pytest
 
-from sistema import api, config
+from sistema import api, config, detector, seguridad
 from sistema.pca import ModeloPCA
+
+CLAVE_TEST = "ab" * 32
+
+
+@pytest.fixture(autouse=True)
+def clave(monkeypatch, tmp_path):
+    """Todos los tests con una clave de prueba (nunca la de datos/clave.key)."""
+    monkeypatch.setenv("SISTEMA_CLAVE", CLAVE_TEST)
+    monkeypatch.setattr(config, "RUTA_CLAVE", tmp_path / "clave.key")
+    seguridad.olvidar_clave()
+    yield
+    seguridad.olvidar_clave()
 
 
 def cara_sintetica(persona: int, variacion: int = 0) -> np.ndarray:
@@ -18,13 +30,16 @@ def cara_sintetica(persona: int, variacion: int = 0) -> np.ndarray:
 
 @pytest.fixture
 def entorno(tmp_path, monkeypatch):
-    """BD vacía + modelo PCA entrenado con 5 personas x 3 fotos, todo en tmp."""
+    """BD vacía + modelo PCA entrenado con 5 personas x 3 fotos, todo en tmp.
+    K=4: con 5 personas solo hay 4 direcciones de identidad; el resto es ruido (y blanqueado pesaría igual)."""
     from sistema import preprocesado
 
     monkeypatch.setattr(config, "RUTA_BD", tmp_path / "bd.csv")
+    # las "caras" sintéticas son ruido: YuNet no las ve. El filtro se prueba aparte (test_seguridad)
+    monkeypatch.setattr(detector, "parece_cara", lambda *a, **k: True)
     monkeypatch.setattr(config, "RUTA_MODELO", tmp_path / "pca.npz")
     caras = np.stack([preprocesado.normalizar(cara_sintetica(p, v)) for p in range(5) for v in range(3)])
-    ModeloPCA.entrenar(caras, n_componentes=10).guardar(config.RUTA_MODELO)
+    ModeloPCA.entrenar(caras, n_componentes=4).guardar(config.RUTA_MODELO, seguridad.clave_modelo())
     api.recargar()
     yield tmp_path
     api.recargar()
