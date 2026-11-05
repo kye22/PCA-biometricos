@@ -4,6 +4,9 @@ Lo usan todos los caminos (entrenamiento, inscripción, consulta y los métodos 
 todos los templates se calculan igual.
 
     recorte -> gris -> TAM_CARA -> ecualización -> máscara elíptica -> media 0, desviación 1
+
+interior(): la misma cara recortada a una elipse más estrecha (sin bordes: fondo, orejas, pelo
+de los lados). PCA describe las dos y el template junta ambas descripciones (pca.py).
 """
 import cv2
 import numpy as np
@@ -11,14 +14,15 @@ import numpy as np
 from . import config
 
 
-def _mascara() -> np.ndarray:
+def _mascara(semiancho: float, semialto: float) -> np.ndarray:
     ancho, alto = config.TAM_CARA
     m = np.zeros((alto, ancho), np.uint8)
-    cv2.ellipse(m, (ancho // 2, int(alto * 0.52)), (int(ancho * 0.42), int(alto * 0.52)), 0, 0, 360, 1, -1)
+    cv2.ellipse(m, (ancho // 2, int(alto * 0.52)), (int(ancho * semiancho), int(alto * semialto)), 0, 0, 360, 1, -1)
     return m.astype(bool)
 
 
-MASCARA = _mascara()
+MASCARA = _mascara(0.42, 0.52)
+MASCARA_INTERIOR = _mascara(0.34, 0.48)
 
 
 def normalizar(cara: np.ndarray) -> np.ndarray:
@@ -34,4 +38,13 @@ def normalizar(cara: np.ndarray) -> np.ndarray:
     dentro = cara[MASCARA]
     salida = np.zeros_like(cara)
     salida[MASCARA] = (dentro - dentro.mean()) / (dentro.std() + 1e-6)
+    return salida
+
+
+def interior(normalizada: np.ndarray) -> np.ndarray:
+    """Cara normalizada -> solo la elipse interior, estandarizada de nuevo (como si se hubiera
+    normalizado con esa máscara desde el principio: la estandarización es lineal)."""
+    dentro = normalizada[MASCARA_INTERIOR]
+    salida = np.zeros_like(normalizada)
+    salida[MASCARA_INTERIOR] = (dentro - dentro.mean()) / (dentro.std() + 1e-6)
     return salida

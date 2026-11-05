@@ -2,9 +2,12 @@
 
 Entrenar = calcular la cara media y las K direcciones de máxima varianza (eigenfaces).
 Extraer  = proyectar una cara sobre ellas y dividir cada coeficiente por su desviación típica
-           ("blanqueo") -> template de K números, todos en la misma escala. Sin blanquear, las
-           primeras eigenfaces (luz, pose) dominan la distancia; blanqueado + coseno es la
-           comparación que mejor funciona (evaluacion/comparar_distancias.py).
+           ("blanqueo") -> K números, todos en la misma escala. Sin blanquear, las primeras
+           eigenfaces (luz, pose) dominan la distancia; blanqueado + coseno es la comparación
+           que mejor funciona (evaluacion/comparar_distancias.py).
+Interior = un segundo PCA, igual pero solo con el interior de la cara (sin bordes: fondo,
+           orejas). El template junta los dos: [K de la cara completa, K del interior]. Los
+           bordes cambian mucho entre fotos (fondo blanco de estudio, pelo) y así pesan la mitad.
 Reconstruir = camino inverso (aproximado). Ojo: esto es justo lo que permite a un atacante
 que lea la BD recuperar una imagen de la cara a partir del template (por eso la BD va cifrada).
 
@@ -27,7 +30,8 @@ from .excepciones import Manipulado, ModeloNoEntrenado
 class ModeloPCA:
     def __init__(self, media: np.ndarray, componentes: np.ndarray, varianzas: np.ndarray | None = None,
                  forma: tuple[int, int] | None = None, umbral: float | None = None,
-                 varianza_total: float | None = None, limites: dict | None = None):
+                 varianza_total: float | None = None, limites: dict | None = None,
+                 interior: "ModeloPCA | None" = None):
         self.media = media                # (D,)
         self.componentes = componentes    # (K, D), filas = eigenfaces
         self.varianzas = varianzas if varianzas is not None else np.ones(len(componentes), np.float32)
@@ -35,10 +39,17 @@ class ModeloPCA:
         self.umbral = umbral
         self.varianza_total = varianza_total
         self.limites = dict(limites or {})   # norma_min, norma_max, residuo_max
+        self.interior = interior             # PCA del interior de la cara (opcional)
+
+    @property
+    def k(self) -> int:
+        """Eigenfaces de la cara completa (la primera parte del template)."""
+        return self.componentes.shape[0]
 
     @property
     def dim(self) -> int:
-        return self.componentes.shape[0]
+        """Longitud del template."""
+        return self.k + (self.interior.dim if self.interior is not None else 0)
 
     @classmethod
     def entrenar(cls, caras: np.ndarray, n_componentes: int) -> "ModeloPCA":
@@ -63,30 +74,39 @@ class ModeloPCA:
         """Las k primeras eigenfaces (PCA está anidado: son las mismas que entrenando con k)."""
         k = min(k, self.dim)
         return ModeloPCA(self.media, self.componentes[:k], self.varianzas[:k], self.forma, self.umbral,
-                         self.varianza_total)
+                         self.varianza_total, interior=self.interior.truncar(k) if self.interior else None)
 
     def extraer(self, cara: np.ndarray) -> np.ndarray:
-        """Cara normalizada -> template blanqueado (K,) float32."""
-        return ((self.componentes @ (cara.reshape(-1) - self.media)) / np.sqrt(self.varianzas)).astype(np.float32)
+        """Cara normalizada -> template blanqueado (dim,) float32."""
+        t = (self.componentes @ (cara.reshape(-1) - self.media)) / np.sqrt(self.varianzas)
+        if self.interior is not None:
+            from .preprocesado import interior
+            t = np.concatenate([t, self.interior.extraer(interior(cara.reshape(self.forma)))])
+        return t.astype(np.float32)
 
     def reconstruir(self, template: np.ndarray) -> np.ndarray:
-        """Template -> cara aproximada (alto, ancho)."""
-        cara = self.media + (template * np.sqrt(self.varianzas)) @ self.componentes
+        """Template -> cara aproximada (alto, ancho), con la parte de la cara completa."""
+        cara = self.media + (template[:self.k] * np.sqrt(self.varianzas)) @ self.componentes
         return cara.reshape(self.forma) if self.forma else cara
 
     def residuo(self, cara: np.ndarray) -> float:
         """Error de reconstrucción relativo ("distancia al espacio de caras"): 0 = la imagen es
         exactamente una combinación de eigenfaces; cerca de 1 = PCA no explica casi nada de ella."""
         x = cara.reshape(-1).astype(np.float32) - self.media
-        r = x - (self.extraer(cara) * np.sqrt(self.varianzas)) @ self.componentes
+        r = x - (self.extraer(cara)[:self.k] * np.sqrt(self.varianzas)) @ self.componentes
         return float(np.linalg.norm(r) / (np.linalg.norm(x) + 1e-6))
 
     def _arrays(self) -> dict[str, np.ndarray]:
         num = lambda v: np.array(np.nan if v is None else v, np.float64)
-        return {"media": self.media, "componentes": self.componentes, "varianzas": self.varianzas,
-                "forma": np.array(self.forma or (), np.int32), "umbral": num(self.umbral),
-                "varianza_total": num(self.varianza_total),
-                **{f"limite_{k}": num(v) for k, v in sorted(self.limites.items())}}
+        arrays = {"media": self.media, "componentes": self.componentes, "varianzas": self.varianzas,
+                  "forma": np.array(self.forma or (), np.int32), "umbral": num(self.umbral),
+                  "varianza_total": num(self.varianza_total),
+                  **{f"limite_{k}": num(v) for k, v in sorted(self.limites.items())}}
+        if self.interior is not None:
+            i = self.interior
+            arrays.update({"interior_media": i.media, "interior_componentes": i.componentes,
+                           "interior_varianzas": i.varianzas, "interior_varianza_total": num(i.varianza_total)})
+        return arrays
 
     @staticmethod
     def _huella(arrays: dict[str, np.ndarray]) -> bytes:
@@ -125,5 +145,9 @@ class ModeloPCA:
         num = lambda k: float(d[k]) if k in d and np.isfinite(d[k]) else None
         forma = tuple(int(x) for x in d["forma"]) if "forma" in d and d["forma"].size else None
         limites = {k[7:]: num(k) for k in d if k.startswith("limite_") and num(k) is not None}
+        interior = None
+        if "interior_media" in d:
+            interior = cls(d["interior_media"], d["interior_componentes"], d["interior_varianzas"], forma,
+                           varianza_total=num("interior_varianza_total"))
         return cls(d["media"], d["componentes"], d.get("varianzas"), forma, num("umbral"),
-                   num("varianza_total"), limites)
+                   num("varianza_total"), limites, interior)

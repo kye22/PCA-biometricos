@@ -103,7 +103,7 @@ def main():
         if modelo.huella() != config.HUELLA_MODELO_BASE:
             sys.exit(f"{config.RUTA_MODELO_BASE.name} no es el del repositorio (huella distinta). "
                      "Si lo has reentrenado tú, actualiza config.HUELLA_MODELO_BASE.")
-        print(f"\nPCA genérico ({config.RUTA_MODELO_BASE.name}): K={modelo.dim} eigenfaces "
+        print(f"\nPCA genérico ({config.RUTA_MODELO_BASE.name}): K={modelo.k} eigenfaces + interior, template de {modelo.dim} "
               f"({modelo.varianza_explicada():.0%} de la varianza de su base de entrenamiento)")
     else:
         entrenamiento = np.stack(caras + [c[:, ::-1] for c in caras])   # + espejos

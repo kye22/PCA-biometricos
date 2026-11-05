@@ -81,8 +81,11 @@ def separar(grupo: np.ndarray, por_grupo: int):
 
 
 def entrenar(caras: np.ndarray, componentes: int) -> ModeloPCA:
-    """caras alineadas (uint8) -> PCA sobre sus versiones normalizadas."""
-    return entrenar_normalizadas(np.stack([preprocesado.normalizar(c) for c in caras]), componentes)
+    """caras alineadas (uint8) -> PCA de la cara completa + PCA del interior (template doble)."""
+    normalizadas = np.stack([preprocesado.normalizar(c) for c in caras])
+    modelo = entrenar_normalizadas(normalizadas, componentes)
+    modelo.interior = entrenar_normalizadas(np.stack([preprocesado.interior(c) for c in normalizadas]), componentes)
+    return modelo
 
 
 def entrenar_normalizadas(normalizadas: np.ndarray, componentes: int) -> ModeloPCA:
@@ -128,7 +131,8 @@ def main():
     modelo.limites = limites(modelo, caras[reserva])
     modelo.guardar(config.RUTA_MODELO_BASE)
     print(f"Entrenado con {len(entreno)} caras: {cuenta}")
-    print(f"K={modelo.dim} eigenfaces ({modelo.varianza_explicada():.0%} de la varianza) -> {config.RUTA_MODELO_BASE}")
+    print(f"K={modelo.k} eigenfaces de la cara completa ({modelo.varianza_explicada():.0%} de la varianza) "
+          f"+ {modelo.interior.k} del interior -> template de {modelo.dim} -> {config.RUTA_MODELO_BASE}")
     print("Límites de cara normal: " + ", ".join(f"{k} {v:.3f}" for k, v in modelo.limites.items()))
     print(f"Huella (copiar en config.HUELLA_MODELO_BASE): {modelo.huella()}")
 

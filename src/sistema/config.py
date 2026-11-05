@@ -14,7 +14,7 @@ RUTA_INSCRITOS = Path(os.getenv("SISTEMA_INSCRITOS", RAIZ / "datos" / "inscritos
 RUTA_MODELO = Path(os.getenv("SISTEMA_MODELO", RAIZ / "modelos" / "pca.npz"))   # modelo + umbral (montar.py)
 RUTA_MODELO_BASE = RAIZ / "modelos" / "pca_base.npz"   # extractor genérico (scripts/entrenar_pca.py)
 # Huella del pca_base.npz que va en git: montar.py se niega a usar otro (la imprime entrenar_pca.py)
-HUELLA_MODELO_BASE = "46689d677c12c80c1cfade9b1b7b00239baa04b3d87dd6e909cf195e153adf3a"
+HUELLA_MODELO_BASE = "c20b9fa59c951ccad316abf43e93b5a3b2dd6e6744b865fd16c24192b1c40df4"
 RUTA_YUNET = RAIZ / "modelos" / "face_detection_yunet_2023mar.onnx"   # detector de caras
 RUTA_CLAVE = Path(os.getenv("SISTEMA_CLAVE_FICHERO", RAIZ / "datos" / "clave.key"))  # secreta, fuera de git
 
