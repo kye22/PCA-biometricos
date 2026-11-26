@@ -37,6 +37,7 @@ datos/inscritos.json
 # Material de trabajo local: en GitHub solo va lo imprescindible para instalar y probar
 .github/
 Prácticas.*
+!Prácticas.md
 Reconocimiento facial.webp
 ataques/
 docs/
