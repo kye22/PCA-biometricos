@@ -3,7 +3,7 @@
 - **Asignatura:** Sistemas Biométricos
 - **Sistema evaluado:** Reconocimiento facial mediante PCA (eigenfaces)
 - **Rama de trabajo:** `eval/defensas_v2`
-- **Commit de referencia de la evaluación:** `a58e10e`
+- **Commit de referencia de la evaluación biométrica:** `a58e10e`
 
 ## 1. Introducción y objetivos
 
@@ -18,7 +18,7 @@ Se consideran dos dimensiones principales:
 1. **Rendimiento biométrico:** capacidad del sistema para reconocer correctamente a las personas.
 2. **Seguridad y robustez:** comportamiento frente a entradas problemáticas y posibles ataques contra el sistema.
 
-La evaluación pretende reflejar los resultados observados, incluyendo los errores del sistema.
+La evaluación pretende reflejar los resultados observados, incluyendo los errores y limitaciones del sistema.
 
 ## 2. Descripción del sistema
 
@@ -296,6 +296,8 @@ Se registraron advertencias de calidad relacionadas con boca y ojos ocultos en d
 
 El sistema incorpora mecanismos de cifrado de templates y verificación de integridad.
 
+Las pruebas realizadas muestran que los coeficientes PCA no se almacenan directamente en claro y que una modificación no autorizada del CSV puede ser detectada mediante HMAC.
+
 Estas medidas protegen aspectos distintos del reconocimiento biométrico y deben evaluarse separadamente de la precisión.
 
 ### 8.5. Reproducibilidad
@@ -309,6 +311,7 @@ Se dispone de:
 - Particiones reproducibles.
 - Métricas calculadas mediante scripts.
 - Resultados exportables en JSON y gráficas.
+- Demostraciones controladas de ataques.
 
 ## 9. Debilidades observadas
 
@@ -351,24 +354,136 @@ Por tanto, conservar el 81 % de la varianza del entrenamiento no implica obtener
 
 ## 10. Seguridad y posibles ataques
 
-El enunciado exige considerar escenarios en los que un atacante pueda acceder a partes del sistema, leer o modificar la base de datos o saltarse etapas del procesamiento biométrico.
+El enunciado exige evaluar escenarios en los que un atacante pueda leer o modificar la base de datos y saltarse determinadas etapas del sistema biométrico.
 
-El repositorio incorpora defensas frente a algunos de estos escenarios:
+Se han realizado demostraciones controladas sobre la implementación, utilizando scripts específicos de la carpeta `ataques/`.
 
-| Escenario | Defensa implementada | Estado de evaluación |
-|---|---|---|
-| Lectura de la base de datos | Cifrado AES-256-GCM de templates | Pendiente de prueba específica documentada |
-| Modificación del CSV | Firma HMAC | Pendiente de prueba específica documentada |
-| Modificación del modelo | Firma y comprobación de integridad | Pendiente de prueba específica documentada |
-| Entrega directa de imágenes sin detector | Validaciones adicionales en determinados métodos `_sd` | Pendiente de prueba específica documentada |
-| Entrega de templates arbitrarios | Validación de estructura y norma | Pendiente de prueba específica documentada |
-| Peticiones web repetidas | Limitación de peticiones | Pendiente de prueba específica documentada |
+Las pruebas de modificación se han ejecutado sobre copias temporales de la base de datos.
 
-La presencia de estas defensas en el código no permite afirmar por sí sola que todos los ataques estén resueltos.
+### 10.1. Lectura de la base de datos
 
-Será necesario ejecutar pruebas específicas y documentar sus resultados.
+Se ejecutó:
 
-También deben analizarse las limitaciones del modelo de amenaza, especialmente la protección de la clave secreta.
+```powershell
+python ataques/lectura_bd.py
+```
+
+Resultados observados:
+
+- 50 filas con templates.
+- 50 identificadores visibles en claro.
+- Campo de template de 572 caracteres Base64.
+- 428 bytes de datos decodificados por template.
+- Existencia de una clave local, cuyo contenido no se mostró.
+
+Los templates contienen 100 componentes de 32 bits, equivalentes a 400 bytes.
+
+El campo cifrado incorpora además el nonce y la etiqueta de autenticación de AES-GCM.
+
+**Conclusión:** el CSV no contiene directamente los coeficientes PCA en claro. Sin embargo, los identificadores de las personas inscritas sí son visibles.
+
+La protección presupone que el atacante no dispone de la clave secreta.
+
+La prueba no demuestra resistencia frente a un atacante que también consiga acceder a dicha clave.
+
+### 10.2. Modificación de la base de datos
+
+Se ejecutó:
+
+```powershell
+python ataques/escritura_bd.py --modo alterar
+```
+
+Resultado observado:
+
+```text
+Ataque detectado: la copia no supera la firma HMAC
+```
+
+El script modificó una fila de una copia temporal de la base de datos.
+
+Al intentar cargarla, la comprobación de integridad detectó la alteración.
+
+**Conclusión:** la firma HMAC protege frente a la modificación no autorizada ensayada, siempre que el atacante no disponga de la clave necesaria para generar una firma válida.
+
+### 10.3. Eliminación de la base de datos y su firma
+
+Se ejecutó:
+
+```powershell
+python ataques/escritura_bd.py --modo borrar-todo
+```
+
+Resultado observado:
+
+```text
+LIMITACIÓN DETECTADA: eliminar BD y firma produce una BD vacía, sin alarma de manipulación
+```
+
+Al desaparecer simultáneamente el CSV y su firma, el sistema interpreta que no existe una base de datos previa.
+
+**Conclusión:** existe una limitación en la detección de este escenario de borrado.
+
+No se ha demostrado que el sistema acepte incorrectamente a un atacante. La consecuencia observada es que la base de datos pasa a interpretarse como vacía, afectando a la disponibilidad de las identidades inscritas.
+
+### 10.4. Bypass de detector y extractor
+
+Se utilizó:
+
+```powershell
+python ataques/bypass.py ID FOTO
+```
+
+El script contrasta tres modalidades:
+
+- `verificar()`: procesamiento completo.
+- `verificar_sd()`: omite la detección y el alineamiento iniciales.
+- `verificar_t()`: recibe directamente un template.
+
+Se obtuvieron los siguientes resultados:
+
+| Fotografía | `verificar()` | `verificar_sd()` | `verificar_t()` |
+|---|---|---|---|
+| Brays Efe | `True` | `True` | `True` |
+| Adele | `False` | `False` | `False` |
+| Stevie Wonder | `CalidadInsuficiente` | `NoPareceCara` | `True` |
+| Ellen Page | `CalidadInsuficiente` | `True` | `True` |
+
+En Brays Efe y Adele no se observaron diferencias de decisión entre las tres interfaces.
+
+En Stevie Wonder, la verificación completa rechazó la fotografía por una posible oclusión de los ojos. La modalidad `_sd` aplicó una comprobación secundaria y rechazó la imagen, mientras que `_t` aceptó el template.
+
+En Ellen Page, la verificación completa rechazó la fotografía por una posible oclusión de la boca o nariz, pero `_sd` y `_t` devolvieron `True`.
+
+**Conclusión:** se ha demostrado que las interfaces alternativas pueden evitar controles de calidad presentes en la cadena completa.
+
+Esto constituye una diferencia relevante en la superficie de ataque.
+
+No obstante, las pruebas no demuestran una suplantación de identidad, porque se utilizaron imágenes y templates genuinos de personas inscritas.
+
+### 10.5. Interpretación y limitaciones de seguridad
+
+Las pruebas permiten identificar tanto defensas efectivas frente a determinados escenarios como limitaciones reales.
+
+**Defensas observadas:**
+
+- Los templates se almacenan cifrados.
+- La firma HMAC detecta la modificación ensayada.
+- La verificación completa incorpora controles de calidad.
+- Determinadas rutas `_sd` mantienen comprobaciones secundarias.
+
+**Debilidades o limitaciones observadas:**
+
+- Los identificadores de la BD son visibles en claro.
+- El borrado simultáneo de BD y firma no se identifica como manipulación.
+- Las rutas `_sd` y `_t` pueden evitar controles de la cadena completa.
+- La seguridad depende de la protección de la clave secreta.
+
+La interfaz `_sd` incluye comprobaciones adicionales con YuNet que pueden entrar en tensión con una interpretación estricta del requisito de omitir el detector.
+
+También debe estudiarse la autorización de acceso a los métodos de inscripción y a las interfaces que reciben templates directamente.
+
+Las pruebas realizadas son demostraciones controladas. No constituyen una auditoría de seguridad completa ni garantizan resistencia frente a ataques más sofisticados.
 
 ## 11. Limitaciones de la evaluación
 
@@ -380,13 +495,13 @@ Los resultados deben interpretarse teniendo en cuenta:
 4. La posible variabilidad de edad, iluminación y pose entre fotografías.
 5. La dependencia entre comparaciones impostoras realizadas sobre una misma imagen.
 6. La falta de una evaluación específica y sistemática de sesgos demográficos.
-7. La necesidad de completar pruebas de ataques para valorar empíricamente las defensas.
+7. El alcance limitado de las pruebas de seguridad: se han ejecutado demostraciones controladas, pero no una auditoría exhaustiva.
 
 No deben extrapolarse automáticamente los porcentajes obtenidos a poblaciones o situaciones diferentes.
 
 ## 12. Reproducibilidad
 
-La evaluación inicial corresponde al código identificado mediante el commit:
+La evaluación biométrica inicial corresponde al código identificado mediante el commit:
 
 ```text
 a58e10e
@@ -408,7 +523,18 @@ python evaluacion/graficas.py --resultados evaluacion/resultados/prueba.json
 
 La ejecución de `montar.py` debe realizarse sobre una instalación sin BD previa; si ya existe una inscripción, el programa requiere una reconstrucción explícita mediante `--recrear`, que sustituye los datos actuales.
 
+Los scripts empleados para la evaluación de seguridad son:
+
+```powershell
+python ataques/lectura_bd.py
+python ataques/escritura_bd.py --modo alterar
+python ataques/escritura_bd.py --modo borrar-todo
+python ataques/bypass.py ID FOTO
+```
+
 Los resultados JSON y las gráficas originales se conservan localmente como evidencias experimentales.
+
+Las figuras utilizadas en este informe se encuentran versionadas en `informe/figuras/`.
 
 ## 13. Conclusiones
 
@@ -424,12 +550,18 @@ Además, el Rank-1 del 15,62 % confirma que el problema no depende exclusivament
 
 Por ello, **la versión evaluada no ofrece un rendimiento adecuado para aplicaciones reales que requieran reconocimiento facial fiable**.
 
-La principal fortaleza del proyecto reside en su estructura, reproducibilidad y mecanismos de protección implementados.
+La principal fortaleza del proyecto reside en su estructura modular, reproducibilidad y mecanismos de protección implementados.
 
-La principal debilidad observada es la capacidad discriminativa insuficiente de la representación PCA utilizada bajo las condiciones de prueba.
+La principal debilidad biométrica observada es la capacidad discriminativa insuficiente de la representación PCA utilizada bajo las condiciones de prueba.
+
+Las pruebas de seguridad han permitido comprobar la detección de modificaciones mediante HMAC, identificar limitaciones ante el borrado completo de la BD y demostrar diferencias entre las interfaces de verificación.
+
+En particular, las interfaces que permiten omitir etapas del procesamiento pueden evitar determinados controles de calidad, por lo que resulta importante considerar sus permisos de acceso y su exposición.
+
+Estas pruebas no constituyen una auditoría completa ni demuestran una suplantación de identidad.
 
 Como trabajo futuro se propone investigar diferentes estrategias de extracción y comparación de características, mejorar el alineamiento y ampliar los conjuntos de evaluación.
 
-También será necesario completar las pruebas de seguridad y contrastar los resultados con fotografías externas proporcionadas por otros grupos.
+También será necesario ampliar los experimentos de seguridad y contrastar el comportamiento del sistema con fotografías externas proporcionadas por otros grupos.
 
 El objetivo de esta evaluación no es ocultar las deficiencias del sistema, sino identificarlas, medirlas y justificar técnicamente sus causas y consecuencias.
