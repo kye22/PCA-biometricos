@@ -4,9 +4,11 @@ Sistema de reconocimiento facial basado en **Principal Component Analysis (PCA /
 
 Permite inscribir, verificar e identificar personas a partir de fotografías faciales. Incorpora detección facial, control de calidad, extracción de características, comparación biométrica y almacenamiento de templates cifrados.
 
-El sistema trabaja con **50 identidades**: las 49 presentes en el dataset proporcionado por el profesor y Álvaro Arbeloa, incorporado por nuestro grupo.
+El proyecto trabaja con **50 identidades**: las 49 presentes en el dataset proporcionado por el profesor y Álvaro Arbeloa, incorporado por nuestro grupo.
 
 El enunciado original puede consultarse en [`Prácticas.md`](Prácticas.md).
+
+El informe completo de evaluación está disponible en [`informe/INFORME.md`](informe/INFORME.md).
 
 ## 1. Características principales
 
@@ -26,7 +28,9 @@ El proyecto implementa:
 - Interfaz web.
 - Ejecución mediante Docker.
 - Tests automatizados.
-- Herramientas de evaluación biométrica y generación de gráficas.
+- Herramientas de evaluación biométrica.
+- Generación de gráficas.
+- Demostraciones controladas de ataques.
 
 La implementación está organizada en módulos independientes dentro de `src/sistema/`.
 
@@ -63,7 +67,7 @@ Para ejecutar el proyecto se necesita:
 
 Las dependencias están bloqueadas mediante `uv.lock`.
 
-**Importante:** se utiliza OpenCV 4.x porque versiones posteriores pueden resultar incompatibles con las funciones de detección empleadas por el proyecto.
+**Importante:** se utiliza OpenCV 4.x para evitar incompatibilidades con las funciones de detección empleadas por el proyecto.
 
 También se ha corregido la carga de los clasificadores Haar para permitir su funcionamiento en rutas de Windows con caracteres Unicode.
 
@@ -122,6 +126,7 @@ PCA-biometricos/
 ├── pyproject.toml
 ├── uv.lock
 ├── app/
+├── ataques/
 ├── datos/
 ├── evaluacion/
 ├── informe/
@@ -379,9 +384,110 @@ Este archivo no debe publicarse.
 
 También es posible configurar la clave mediante variables de entorno.
 
-**Importante:** estas son defensas implementadas. Su resistencia frente a ataques concretos debe comprobarse mediante pruebas específicas.
+### 12.1. Pruebas de ataques realizadas
 
-El informe distingue las funcionalidades existentes de los ataques que todavía no han sido evaluados experimentalmente.
+Se han ejecutado demostraciones controladas de los escenarios principales solicitados en el enunciado.
+
+Los scripts se encuentran en `ataques/`.
+
+| Ataque | Script | Resultado observado |
+|---|---|---|
+| Lectura de la BD | `lectura_bd.py` | Templates cifrados; identificadores visibles. |
+| Modificación del CSV | `escritura_bd.py --modo alterar` | HMAC detecta la alteración. |
+| Eliminación de CSV y firma | `escritura_bd.py --modo borrar-todo` | Se interpreta como una BD vacía. |
+| Bypass de componentes | `bypass.py` | Las interfaces alternativas pueden omitir controles de calidad. |
+
+Las pruebas de modificación utilizan copias temporales y no alteran intencionadamente la base de datos original.
+
+### 12.2. Lectura de la BD
+
+Para inspeccionar pasivamente el CSV:
+
+```powershell
+python ataques/lectura_bd.py
+```
+
+En nuestra ejecución se observaron:
+
+- 50 filas con templates.
+- 50 identificadores en claro.
+- Campos cifrados de 572 caracteres Base64.
+- 428 bytes decodificados por template.
+
+El resultado es coherente con templates de 100 características `float32` protegidos mediante AES-GCM.
+
+El cifrado protege los coeficientes biométricos frente al escenario de lectura sin clave, pero no oculta los identificadores.
+
+### 12.3. Modificación de la BD
+
+Para modificar una copia temporal:
+
+```powershell
+python ataques/escritura_bd.py --modo alterar
+```
+
+Resultado observado:
+
+```text
+Ataque detectado: la copia no supera la firma HMAC
+```
+
+La protección de integridad detectó la modificación ensayada.
+
+### 12.4. Borrado completo
+
+Para probar el borrado de una copia temporal de la BD y su firma:
+
+```powershell
+python ataques/escritura_bd.py --modo borrar-todo
+```
+
+Resultado observado:
+
+```text
+LIMITACIÓN DETECTADA: eliminar BD y firma produce una BD vacía, sin alarma de manipulación
+```
+
+Esta situación representa una limitación de disponibilidad y de detección de ciertos escenarios de manipulación.
+
+No significa que el sistema acepte automáticamente a un atacante.
+
+### 12.5. Bypass de detector y extractor
+
+Para comparar las tres interfaces:
+
+```powershell
+python ataques/bypass.py ID FOTO
+```
+
+Se obtuvieron los siguientes resultados:
+
+| Fotografía | `verificar()` | `verificar_sd()` | `verificar_t()` |
+|---|---|---|---|
+| Brays Efe | `True` | `True` | `True` |
+| Adele | `False` | `False` | `False` |
+| Stevie Wonder | `CalidadInsuficiente` | `NoPareceCara` | `True` |
+| Ellen Page | `CalidadInsuficiente` | `True` | `True` |
+
+Estas pruebas muestran que las interfaces que omiten etapas del procesamiento pueden evitar determinados controles de calidad.
+
+En particular, `verificar_t()` recibe directamente un template y no comprueba la fotografía original.
+
+**Las pruebas no demuestran una suplantación exitosa:** los templates utilizados procedían de fotografías genuinas de personas inscritas.
+
+### 12.6. Limitaciones del modelo de amenaza
+
+Las defensas deben interpretarse teniendo en cuenta que:
+
+- La seguridad del cifrado y las firmas depende de la protección de la clave.
+- Los identificadores de la BD se almacenan en claro.
+- El borrado simultáneo del CSV y su firma no se detecta como manipulación.
+- Las interfaces `_sd` y `_t` tienen superficies de ataque distintas.
+- Es necesario controlar quién puede acceder a los métodos de inscripción y a las interfaces que reciben templates directamente.
+
+Las pruebas realizadas son demostraciones controladas, no una auditoría exhaustiva de seguridad.
+
+El análisis completo está documentado en [`informe/INFORME.md`](informe/INFORME.md).
 
 ## 13. Evaluación biométrica
 
@@ -642,6 +748,10 @@ Para conservarlos entre ejecuciones sería necesario configurar volúmenes persi
 | `evaluacion/evaluar.py` | Evaluación mediante fotografías reservadas. |
 | `evaluacion/calibrar_umbral.py` | Calibración del umbral. |
 | `evaluacion/graficas.py` | Generación de gráficas. |
+| `ataques/lectura_bd.py` | Demostración de lectura del CSV. |
+| `ataques/escritura_bd.py` | Pruebas de modificación y borrado sobre copias. |
+| `ataques/bypass.py` | Comparación de interfaces de verificación. |
+| `ataques/README.md` | Descripción de escenarios y limitaciones de los ataques. |
 | `informe/INFORME.md` | Informe de evaluación propia. |
 | `informe/figuras/` | Gráficas de la evaluación inicial. |
 | `modelos/pca_base.npz` | Extractor PCA genérico. |
@@ -665,15 +775,24 @@ Durante el montaje se generan archivos que no deben publicarse:
 
 También se ignoran los entornos virtuales y archivos temporales de Python.
 
-## 19. Estado de la evaluación y trabajo futuro
+## 19. Estado del proyecto y trabajo futuro
 
-El sistema dispone de una evaluación cuantitativa reproducible y un informe de resultados.
+El sistema dispone de:
+
+- Una implementación funcional de las operaciones biométricas solicitadas.
+- Una evaluación cuantitativa con separación entre inscripción y prueba.
+- Métricas FAR, FRR, EER, Rank-1 y CMC.
+- Gráficas reproducibles.
+- Un informe de evaluación propia.
+- Demostraciones controladas de lectura, modificación y bypass de componentes.
 
 Se han observado limitaciones importantes en la capacidad de identificación y verificación con fotografías independientes.
 
-Queda pendiente completar y documentar pruebas específicas frente a ataques de lectura, modificación y bypass de componentes.
+Las pruebas de seguridad han permitido comprobar algunas defensas implementadas y detectar debilidades concretas, como el borrado simultáneo de la BD y su firma o la posibilidad de omitir controles de calidad mediante interfaces alternativas.
 
-También se plantea como trabajo futuro:
+Estas pruebas no constituyen una auditoría de seguridad completa.
+
+Como trabajo futuro se propone:
 
 - Investigar otras estrategias de comparación.
 - Evaluar diferentes números de componentes PCA.
@@ -682,6 +801,8 @@ También se plantea como trabajo futuro:
 - Ampliar las fotografías de evaluación.
 - Incorporar identidades desconocidas.
 - Analizar posibles diferencias de rendimiento entre grupos demográficos.
+- Ampliar las pruebas de seguridad.
+- Contrastar el sistema con fotografías externas del grupo rival.
 
 Las mejoras futuras deberán distinguirse de la versión inicial evaluada y utilizar datos independientes para validar su rendimiento.
 
