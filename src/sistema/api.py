@@ -21,6 +21,11 @@ Defensas de entrada (límites medidos en la base de entrenamiento y guardados co
 - todos los caminos, incluido _t: TemplateInvalido si la norma del template es imposible para
   una cara real (p. ej. ceros = "la cara media", o valores extremos).
 - inscribir*: IdInvalido si el id no es texto simple (evita inyección de fórmulas en el .csv).
+- inscribir*: IdYaInscrito si el id ya está en la BD, para que nadie añada su cara a la identidad
+  de otro. Con actualizar=True se admite otra muestra, pero solo si ya verifica contra ese id
+  (si no, InscripcionRechazada). La carga inicial con varias fotos por persona la hace montar.py
+  con _inscribir_carga_inicial().
+El umbral sale siempre del modelo firmado (no hay variable de entorno que lo cambie).
 El modelo se carga comprobando su firma y la BD va cifrada y firmada (seguridad.py, bd.py).
 """
 import re
@@ -29,7 +34,8 @@ from functools import lru_cache
 import numpy as np
 
 from . import bd, calidad, comparador, config, detector, imagen, preprocesado, seguridad
-from .excepciones import IdDesconocido, IdInvalido, NoPareceCara, TemplateInvalido
+from .excepciones import (IdDesconocido, IdInvalido, IdYaInscrito, InscripcionRechazada, NoPareceCara,
+                          TemplateInvalido)
 from .pca import ModeloPCA
 
 
@@ -48,9 +54,7 @@ _ID = re.compile(r"^\w[\w().\-]{0,79}$")
 
 
 def umbral() -> float:
-    """El de la variable de entorno si existe; si no, el guardado con el modelo."""
-    if config.UMBRAL is not None:
-        return config.UMBRAL
+    """El guardado (y firmado) con el modelo. No se puede cambiar por variable de entorno."""
     return _modelo().umbral if _modelo().umbral is not None else config.UMBRAL_POR_DEFECTO
 
 
@@ -92,9 +96,29 @@ def validar(template) -> np.ndarray:
 
 # --- núcleo común: todo acaba aquí --------------------------------------------
 
-def inscribir_t(id: str, template) -> None:
+def _validar_id(id) -> None:
     if not isinstance(id, str) or not _ID.match(id):
         raise IdInvalido(f"Id no válido: {id!r} (solo letras, números y _ ( ) . -)")
+
+
+def inscribir_t(id: str, template, actualizar: bool = False) -> None:
+    """Inscribe un id nuevo. Un id ya inscrito no se amplía salvo con actualizar=True y una
+    muestra que ya verifique contra él: así nadie puede añadir su cara a la identidad de otro."""
+    _validar_id(id)
+    t = validar(template)
+    base = bd.cargar()
+    if id in base:
+        if not actualizar:
+            raise IdYaInscrito(f"'{id}' ya está inscrito (para añadir otra muestra suya: actualizar=True)")
+        if not comparador.acepta(comparador.distancia_a_id(t, base[id]), umbral()):
+            raise InscripcionRechazada(f"La nueva muestra no verifica contra '{id}'")
+    bd.guardar(id, t)
+
+
+def _inscribir_carga_inicial(id: str, template) -> None:
+    """Solo para scripts/montar.py (quien administra el sistema): añade un template sin la regla
+    de ids ya inscritos, para cargar varias fotos por persona en el montaje."""
+    _validar_id(id)
     bd.guardar(id, validar(template))
 
 
@@ -117,8 +141,8 @@ def identificar_t(template) -> str | None:
 
 # --- sin detector ---------------------------------------------------------------
 
-def inscribir_sd(id: str, foto) -> None:
-    inscribir_t(id, _template_desde_foto(foto, con_detector=False))
+def inscribir_sd(id: str, foto, actualizar: bool = False) -> None:
+    inscribir_t(id, _template_desde_foto(foto, con_detector=False), actualizar)
 
 
 def verificar_sd(id: str, foto) -> bool:
@@ -131,8 +155,8 @@ def identificar_sd(foto) -> str | None:
 
 # --- pipeline completo ------------------------------------------------------------
 
-def inscribir(id: str, foto) -> None:
-    inscribir_t(id, _template_desde_foto(foto, con_detector=True))
+def inscribir(id: str, foto, actualizar: bool = False) -> None:
+    inscribir_t(id, _template_desde_foto(foto, con_detector=True), actualizar)
 
 
 def verificar(id: str, foto) -> bool:

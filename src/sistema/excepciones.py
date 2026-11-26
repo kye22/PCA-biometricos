@@ -37,6 +37,14 @@ class IdInvalido(ErrorSistema):
     """El id tiene caracteres no permitidos."""
 
 
+class IdYaInscrito(ErrorSistema):
+    """Se intenta inscribir un id que ya está en la BD (sin actualizar=True)."""
+
+
+class InscripcionRechazada(ErrorSistema):
+    """Con actualizar=True, la nueva muestra no verifica contra el id que se quiere ampliar."""
+
+
 class ClaveNoEncontrada(ErrorSistema):
     """Falta la clave secreta (datos/clave.key o SISTEMA_CLAVE): ejecutar scripts/montar.py."""
 

@@ -24,7 +24,7 @@ TAM_CARA = (100, 100)
 # PCA
 N_COMPONENTES = int(os.getenv("SISTEMA_COMPONENTES", 50))
 
-# Umbral de distancia para aceptar. Por defecto el que calcula montar.py y se guarda dentro del
-# modelo; esta variable solo lo sobrescribe (útil para experimentar).
-UMBRAL = float(os.environ["SISTEMA_UMBRAL"]) if "SISTEMA_UMBRAL" in os.environ else None
+# Umbral de distancia para aceptar: el que calcula montar.py (o calibrar_umbral.py --aplicar) y
+# se guarda FIRMADO dentro del modelo. A propósito no hay variable de entorno para cambiarlo:
+# quien controlase el entorno podría poner un umbral que acepta a cualquiera.
 UMBRAL_POR_DEFECTO = 0.5  # distancia coseno; solo si el modelo no trae umbral

@@ -46,8 +46,6 @@ def main() -> None:
         modelo.guardar(config.RUTA_MODELO, seguridad.clave_modelo())
         api.recargar()
         print(f"Umbral guardado y firmado en {config.RUTA_MODELO}")
-        if config.UMBRAL is not None:
-            print("AVISO: SISTEMA_UMBRAL sigue sobrescribiendo el umbral del modelo")
 
 
 if __name__ == "__main__":

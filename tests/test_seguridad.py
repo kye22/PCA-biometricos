@@ -6,16 +6,16 @@ import pytest
 from PIL import Image
 
 from sistema import api, bd, config, imagen, seguridad
-from sistema.excepciones import (ClaveNoEncontrada, IdInvalido, Manipulado, NoPareceCara,
-                                 TemplateInvalido)
+from sistema.excepciones import (ClaveNoEncontrada, IdInvalido, IdYaInscrito, InscripcionRechazada,
+                                 Manipulado, NoPareceCara, TemplateInvalido)
 from sistema.pca import ModeloPCA
 
-from conftest import cara_sintetica
+from conftest import cara_sintetica, fijar_umbral
 
 
 @pytest.fixture
-def inscritos(entorno, monkeypatch):
-    monkeypatch.setattr(config, "UMBRAL", 0.3)
+def inscritos(entorno):
+    fijar_umbral(0.3)
     for p in range(3):
         api.inscribir_sd(f"persona{p}", cara_sintetica(p, 0))
     return entorno
@@ -103,6 +103,38 @@ def test_cambiar_el_umbral_del_modelo_se_detecta(inscritos):
     api.recargar()
     with pytest.raises(Manipulado):
         api.identificar_sd(cara_sintetica(0, 1))
+
+
+def test_umbral_no_se_cambia_por_entorno(inscritos, monkeypatch):
+    """Con el umbral en una variable de entorno, quien controle el entorno aceptaría a cualquiera."""
+    monkeypatch.setenv("SISTEMA_UMBRAL", "2")
+    assert not hasattr(config, "UMBRAL")
+    assert api.umbral() == pytest.approx(0.3)
+    assert not api.verificar_sd("persona0", cara_sintetica(1, 1))
+
+
+# --- inscripción ---------------------------------------------------------------------------
+
+def test_no_se_puede_inscribir_sobre_un_id_existente(inscritos):
+    """Secuestro de id: añadir mi cara a la identidad de otro por la API."""
+    with pytest.raises(IdYaInscrito):
+        api.inscribir_sd("persona0", cara_sintetica(3, 0))
+    assert not api.verificar_sd("persona0", cara_sintetica(3, 1))
+    assert len(bd.cargar()["persona0"]) == 1
+
+
+def test_actualizar_solo_con_una_muestra_que_verifica(inscritos):
+    with pytest.raises(InscripcionRechazada):
+        api.inscribir_sd("persona0", cara_sintetica(3, 0), actualizar=True)
+    api.inscribir_sd("persona0", cara_sintetica(0, 2), actualizar=True)
+    assert len(bd.cargar()["persona0"]) == 2
+
+
+def test_carga_inicial_admite_varias_fotos_por_persona(entorno):
+    """montar.py inscribe varias fotos por persona con la carga inicial de administrador."""
+    for v in range(2):
+        api._inscribir_carga_inicial("persona0", api._template_desde_foto(cara_sintetica(0, v), con_detector=False))
+    assert len(bd.cargar()["persona0"]) == 2
 
 
 # --- entradas fabricadas -----------------------------------------------------------------

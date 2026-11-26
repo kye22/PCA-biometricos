@@ -5,12 +5,12 @@ import pytest
 from sistema import api, config
 from sistema.excepciones import CaraNoEncontrada, IdDesconocido, TemplateInvalido
 
-from conftest import cara_sintetica
+from conftest import cara_sintetica, fijar_umbral
 
 
 @pytest.fixture
-def inscritos(entorno, monkeypatch):
-    monkeypatch.setattr(config, "UMBRAL", 0.3)  # coseno: genuinas ~0.05, impostoras ~1
+def inscritos(entorno):
+    fijar_umbral(0.3)  # coseno: genuinas ~0.05, impostoras ~1
     for p in range(3):
         api.inscribir_sd(f"persona{p}", cara_sintetica(p, 0))
     return entorno

@@ -10,7 +10,8 @@
    base diversa (scripts/entrenar_pca.py), y comprueba que es el que está fijado en el código.
    NO se entrena con los inscritos: la BD solo guarda a quien tiene acceso.
 5. Crea la clave secreta si no existe (datos/clave.key, fuera de git) e inscribe a todos en una
-   BD nueva (datos/bd.csv, cifrada y firmada) con la API normal.
+   BD nueva (datos/bd.csv, cifrada y firmada) con la misma cadena que inscribir(), como carga
+   inicial de administrador (admite varias fotos por persona).
 6. Calcula un umbral PROVISIONAL a partir de las distancias entre personas distintas y lo
    guarda dentro del modelo (pca.npz, firmado con la clave).
 """
@@ -246,10 +247,13 @@ def main():
     bd.borrar()
     inscritos = {}
     for id_, f, manual in validas:
+        # Carga inicial (administrador): admite varias fotos por persona, que inscribir() ya no
+        # permite (un id inscrito no se amplía). Mismo template que inscribir() / inscribir_sd().
         if manual is not None:   # cara ya alineada con los ojos marcados a mano
-            api.inscribir_sd(id_, manual)
+            template = api._template_desde_foto(manual, con_detector=False)
         else:
-            api.inscribir(id_, f)
+            template = api._template_desde_foto(f, con_detector=True)
+        api._inscribir_carga_inicial(id_, template)
         inscritos.setdefault(id_, []).append({
             "foto": ruta_relativa(f),
             "sha256": hashlib.sha256(f.read_bytes()).hexdigest(),

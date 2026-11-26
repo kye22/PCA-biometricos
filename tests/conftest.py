@@ -28,6 +28,15 @@ def cara_sintetica(persona: int, variacion: int = 0) -> np.ndarray:
     return np.clip(base + ruido, 0, 255).astype(np.uint8)
 
 
+def fijar_umbral(u: float) -> None:
+    """Guarda el umbral en el modelo firmado del entorno de test, como hace montar.py
+    (no hay variable de entorno para cambiarlo)."""
+    m = ModeloPCA.cargar(config.RUTA_MODELO, seguridad.clave_modelo())
+    m.umbral = u
+    m.guardar(config.RUTA_MODELO, seguridad.clave_modelo())
+    api.recargar()
+
+
 @pytest.fixture
 def entorno(tmp_path, monkeypatch):
     """BD vacía + modelo PCA entrenado con 5 personas x 3 fotos, todo en tmp.
