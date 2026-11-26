@@ -11,6 +11,7 @@
 """
 from functools import lru_cache
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -18,12 +19,47 @@ import numpy as np
 from . import config
 from .excepciones import CaraNoEncontrada
 
-_HAAR = cv2.data.haarcascades
+_HAAR = Path(cv2.data.haarcascades)
+
+
+def _cargar_cascada(nombre: str) -> cv2.CascadeClassifier:
+    """Carga una cascada Haar sin depender de rutas Unicode de OpenCV.
+
+    Python lee el XML y OpenCV lo procesa directamente en memoria.
+    Esto evita problemas con tildes y caracteres no ASCII en Windows.
+    """
+    ruta = _HAAR / nombre
+    contenido = ruta.read_text(encoding="utf-8")
+
+    almacenamiento = cv2.FileStorage(
+        contenido,
+        cv2.FILE_STORAGE_READ | cv2.FILE_STORAGE_MEMORY
+    )
+
+    try:
+        if not almacenamiento.isOpened():
+            raise RuntimeError(f"No se puede interpretar la cascada: {ruta}")
+
+        clasificador = cv2.CascadeClassifier()
+
+        if not clasificador.read(almacenamiento.getFirstTopLevelNode()):
+            raise RuntimeError(f"No se puede cargar la cascada: {ruta}")
+
+        if clasificador.empty():
+            raise RuntimeError(f"Cascada vacía: {ruta}")
+
+        return clasificador
+
+    finally:
+        almacenamiento.release()
+
+
 _CASCADAS = [
-    (n, cv2.CascadeClassifier(_HAAR + f"haarcascade_frontalface_{n}.xml"))
+    (n, _cargar_cascada(f"haarcascade_frontalface_{n}.xml"))
     for n in ("default", "alt2", "alt")
 ]
-_OJOS = cv2.CascadeClassifier(_HAAR + "haarcascade_eye.xml")
+
+_OJOS = _cargar_cascada("haarcascade_eye.xml")
 
 UMBRAL_YUNET = 0.6       # confianza mínima de YuNet para aceptar una cara
 LADO_MAX = 1000          # se reduce la foto a esto para detectar (velocidad)
