@@ -13,8 +13,10 @@ Antes de probar ataques, monta el sistema. Los scripts no alteran la BD original
 
 - Se supone que el atacante puede leer o escribir **la BD**, pero no dispone de la **clave**. Si
   obtiene también `datos/clave.key`, la confidencialidad y las firmas dejan de proteger frente a él.
-- Los métodos `inscribir_*` no exigen autenticación de administrador. Si el rival obtiene acceso
-  autorizado a esos métodos, puede añadir templates legítimamente; HMAC no lo previene.
+- Los métodos `inscribir_*` no exigen autenticación de administrador. Quien tenga acceso a ellos
+  puede inscribir ids **nuevos**; HMAC no lo previene. Un id ya inscrito no se puede ampliar
+  (`IdYaInscrito`) salvo con `actualizar=True` y una muestra que ya verifique contra él
+  (`InscripcionRechazada` si no): nadie puede añadir su cara a la identidad de otro.
 - `verificar_sd` e `identificar_sd` evitan el detector de la cadena principal pero ejecutan
   `detector.parece_cara` con YuNet como defensa secundaria heredada. **Puede contradecir la
   lectura literal del enunciado**, y debe discutirse en la evaluación. No se ha modificado.

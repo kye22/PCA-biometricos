@@ -565,3 +565,16 @@ Como trabajo futuro se propone investigar diferentes estrategias de extracción 
 También será necesario ampliar los experimentos de seguridad y contrastar el comportamiento del sistema con fotografías externas proporcionadas por otros grupos.
 
 El objetivo de esta evaluación no es ocultar las deficiencias del sistema, sino identificarlas, medirlas y justificar técnicamente sus causas y consecuencias.
+
+## 14. Cambios posteriores a la evaluación
+
+Tras la evaluación se corrigieron dos debilidades de seguridad encontradas en una revisión interna:
+
+| Debilidad | Antes | Ahora |
+|---|---|---|
+| **Secuestro de un id inscrito** | `inscribir("adele", foto_de_otra_persona)` se aceptaba sin comprobar nada y esa persona pasaba a verificar como `adele`. | `IdYaInscrito`. Solo se puede añadir una muestra con `actualizar=True` y si ya verifica contra el id (si no, `InscripcionRechazada`). |
+| **Umbral por variable de entorno** | Con `SISTEMA_UMBRAL=2` se aceptaba a cualquiera, aunque el umbral del modelo estuviera firmado. | La variable ya no existe: el umbral sale siempre del modelo firmado. |
+
+Ninguno de los dos cambios afecta a la evaluación biométrica: con el manifiesto se inscribe una foto por persona y el umbral ya procedía del modelo. Se repitió el procedimiento de la sección 12 con el código corregido y se obtuvieron **las mismas cifras** (FAR 0,96 %, FRR 87,50 %, EER 40,15 %, Rank-1 15,62 %) y las mismas gráficas.
+
+Limitación que se mantiene: con `actualizar=True`, un impostor que consiga verificar una vez puede añadir su muestra a ese id.

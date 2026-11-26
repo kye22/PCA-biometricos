@@ -77,6 +77,12 @@ También se ha corregido la carga de los clasificadores Haar para permitir su fu
 
 Abre una terminal PowerShell en la raíz del repositorio.
 
+Si no tienes `uv`, instálalo primero (si no, el siguiente paso falla con `No module named uv`):
+
+```powershell
+py -m pip install uv
+```
+
 Ejecuta:
 
 ```powershell
@@ -337,6 +343,12 @@ resultado = verificar("adele", "foto.jpg")
 
 La modalidad `_t` trabaja directamente con templates.
 
+**Inscripción de un id ya inscrito.** `inscribir*` sobre un id que ya está en la BD lanza
+`IdYaInscrito`: nadie puede añadir su cara a la identidad de otro. Para añadir otra muestra a un
+id existente se usa `actualizar=True` (`inscribir(id, foto, actualizar=True)`), y solo se acepta si
+la nueva muestra **ya verifica** contra ese id; si no, `InscripcionRechazada`. La carga inicial con
+varias fotos por persona la hace `scripts/montar.py` como administrador.
+
 Las modalidades `_sd` omiten la detección y alineamiento iniciales, aunque determinadas operaciones mantienen comprobaciones adicionales mediante YuNet.
 
 ## 11. Control de calidad
@@ -367,7 +379,8 @@ El sistema incorpora diferentes mecanismos de protección:
 |---|---|
 | Cifrado AES-256-GCM | Proteger los templates almacenados. |
 | Firma HMAC de la BD | Detectar modificaciones no autorizadas del CSV. |
-| Firma HMAC del modelo | Detectar cambios en el modelo operativo y su umbral. |
+| Firma HMAC del modelo | Detectar cambios en el modelo operativo y su umbral. El umbral solo sale del modelo firmado: no hay variable de entorno que lo cambie. |
+| Ids no reutilizables | `inscribir*` no acepta un id ya inscrito salvo con `actualizar=True` y una muestra que verifique contra él. |
 | Huella fija del PCA genérico | Comprobar la identidad del extractor. |
 | Validación de templates | Rechazar determinadas representaciones anómalas. |
 | Validación de identificadores | Limitar los valores admitidos como identificadores. |
@@ -483,7 +496,10 @@ Las defensas deben interpretarse teniendo en cuenta que:
 - Los identificadores de la BD se almacenan en claro.
 - El borrado simultáneo del CSV y su firma no se detecta como manipulación.
 - Las interfaces `_sd` y `_t` tienen superficies de ataque distintas.
-- Es necesario controlar quién puede acceder a los métodos de inscripción y a las interfaces que reciben templates directamente.
+- Es necesario controlar quién puede acceder a los métodos de inscripción y a las interfaces que reciben templates directamente: cualquiera puede inscribir ids **nuevos** (no los existentes).
+- `actualizar=True` permite que un impostor que consiga verificar una vez añada su muestra a ese id.
+- El límite de intentos solo existe en la interfaz web; la librería no limita consultas.
+- La validación de `_t` comprueba la longitud, que los valores sean finitos y que la norma sea la de una cara real; no garantiza que el vector proceda de una foto.
 
 Las pruebas realizadas son demostraciones controladas, no una auditoría exhaustiva de seguridad.
 
@@ -656,6 +672,8 @@ Para ejecutar todas las pruebas:
 ```powershell
 py -m uv run --locked --extra dev python -m pytest -q
 ```
+
+Con la instalación de pip vale también `python -m pytest -q` o `pytest -q`.
 
 Las pruebas utilizan datos preparados para testing y no requieren el dataset original del profesor.
 
