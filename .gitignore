@@ -41,7 +41,10 @@ Prácticas.*
 Reconocimiento facial.webp
 ataques/
 docs/
-evaluacion/
+# Scripts de evaluación versionados; resultados generados ignorados
+evaluacion/particion.json
+evaluacion/resultados/
+evaluacion/*.tmp
 datos/pruebas/
 scripts/descargar_anexo.py
 scripts/hoja_anexo.py
