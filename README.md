@@ -1,604 +1,445 @@
 # Reconocimiento facial con PCA — Sistemas Biométricos
 
-Sistema de reconocimiento facial desarrollado en Python y basado en
-**PCA (Principal Component Analysis / Eigenfaces)**.
+Sistema de reconocimiento facial basado en **PCA (eigenfaces)**, desarrollado en Python para la asignatura de Sistemas Biométricos.
 
-El sistema utiliza una base de datos CSV y permite inscribir, verificar
-e identificar personas mediante fotografías faciales.
+El sistema permite inscribir, verificar e identificar personas a partir de fotografías faciales. Utiliza una base de datos en formato CSV que almacena los templates biométricos cifrados.
 
-La base de datos contiene 50 identidades:
-- 49 personas del dataset proporcionado por el profesor.
-- Álvaro Arbeloa, elegido por el grupo.
+El proyecto trabaja con 50 identidades: las 49 presentes en el dataset proporcionado por el profesor y Álvaro Arbeloa, incorporado por el grupo.
 
-Se permite inscribir varias fotografías por persona, almacenando
-un template diferente para cada una.
+El enunciado original de la práctica se encuentra en [`Prácticas.md`](Prácticas.md).
 
-## Arquitectura del sistema
+## 1. Arquitectura del sistema
 
-El reconocimiento facial sigue el siguiente proceso:
+El procesamiento de una imagen sigue, de forma general, estas etapas:
 
-```text
-Fotografía
-    |
-    v
-Detector facial (YuNet / Haar)
-    |
-    v
-Alineamiento y control de calidad
-    |
-    v
-Normalización de la cara
-    |
-    v
-Extracción de características PCA
-    |
-    v
-Template facial
-    |
-    v
-Comparación mediante distancia coseno
-    |
-    v
-Base de datos CSV cifrada y firmada
-    |
-    v
-Decisión: verificación / identificación
-```
+1. **Detección facial:** localización del rostro mediante YuNet y cascadas Haar.
+2. **Control de calidad:** comprobación de distintas características de la imagen.
+3. **Alineamiento:** corrección de la posición de la cara utilizando los ojos como referencia.
+4. **Normalización:** preparación de la imagen para el extractor.
+5. **Extracción PCA:** transformación de la imagen en un template de características.
+6. **Comparación:** cálculo de distancias entre templates mediante distancia coseno.
+7. **Decisión:** aceptación, rechazo o identificación según el umbral establecido.
 
-## 1. Requisitos
+El sistema dispone de tres operaciones principales:
 
-Para ejecutar el proyecto localmente se necesita:
+- **Inscripción:** almacena los templates asociados a una identidad.
+- **Verificación (1:1):** comprueba si una imagen corresponde a una identidad declarada.
+- **Identificación (1:N):** busca la identidad más cercana entre las personas inscritas.
 
-- Python 3.10 o superior (recomendado Python 3.11).
-- Git.
-- El archivo `Dataset.tar.gz` proporcionado por el profesor.
+La implementación principal se encuentra en `src/sistema/`.
 
-Opcionalmente:
+## 2. Requisitos
 
-- Visual Studio Code como entorno de desarrollo.
-- Docker Desktop para ejecutar el sistema mediante contenedores.
+Para ejecutar el proyecto se necesita:
 
-Las dependencias de Python se encuentran en `pyproject.toml`
-y pueden instalarse utilizando `requirements.txt`.
+- Python 3.10 o superior. Se recomienda Python 3.11.
+- OpenCV 4.x.
+- Las dependencias definidas en `pyproject.toml`.
+- El archivo `Dataset.tar.gz`, proporcionado por el profesor, para realizar la inscripción inicial.
 
-El proyecto utiliza OpenCV 4.x para garantizar la compatibilidad
-con los detectores faciales implementados.
+El proyecto utiliza `uv.lock` para facilitar una instalación reproducible de las dependencias.
 
-## 2. Instalación local
+También puede ejecutarse mediante Docker.
 
-### 2.1. Windows (PowerShell / VS Code)
+## 3. Instalación y ejecución local
 
-Abre una terminal de PowerShell desde la raíz del repositorio.
+### 3.1. Instalación recomendada con uv
 
-Crea un entorno virtual:
+Desde una terminal PowerShell de VS Code, situada en la raíz del repositorio:
 
 ```powershell
-py -3 -m venv .venv
+py -m uv sync --locked --extra dev
 ```
 
-Actívalo:
+Este comando crea o actualiza el entorno virtual `.venv` e instala las dependencias del proyecto.
+
+Para comprobar la instalación:
 
 ```powershell
+py -m uv run --locked --extra dev python -m pytest -q
+```
+
+Los tests automatizados no necesitan el dataset del profesor.
+
+### 3.2. Instalación alternativa con venv y pip
+
+Si no se desea utilizar `uv`, también es posible crear un entorno virtual manualmente.
+
+En Windows:
+
+```powershell
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-Instala las dependencias:
-
-```powershell
 python -m pip install -r requirements.txt
+python -m pytest -q
 ```
 
-Si PowerShell impide activar el entorno virtual, puedes utilizar
-directamente su intérprete:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-En este último caso, también tendrás que utilizar ese intérprete
-para ejecutar los scripts.
-
-### 2.2. Linux / macOS
-
-Desde la raíz del repositorio:
+En Linux o macOS:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+python -m pytest -q
 ```
 
-### 2.3. Instalación alternativa con uv
+**Importante:** el proyecto requiere OpenCV 4.x. Se ha restringido la versión de la dependencia para evitar incompatibilidades con las funciones de detección utilizadas.
 
-El repositorio también dispone de `uv.lock`, que permite
-reproducir las versiones de las dependencias.
+También se ha corregido la carga de los clasificadores Haar para permitir su funcionamiento en Windows cuando la ruta del proyecto contiene caracteres Unicode, como tildes.
 
-Si tienes instalado `uv`, puedes ejecutar:
+## 4. Preparación del dataset
 
-```bash
-uv sync --extra dev
-```
+El archivo `Dataset.tar.gz` no se incluye en Git debido a su tamaño y a que ha sido proporcionado por el profesor.
 
-Para ejecutar un script mediante `uv`:
-
-```bash
-uv run python scripts/montar.py
-```
-
-## 3. Preparación del dataset
-
-El dataset de la práctica se proporciona por separado
-y no está incluido en el repositorio.
-
-Coloca el archivo:
-
-```text
-Dataset.tar.gz
-```
-
-en la raíz del proyecto.
-
-La estructura esperada es:
+Debe colocarse en la raíz del repositorio:
 
 ```text
 PCA-biometricos/
-    |
-    |-- Dataset.tar.gz
-    |-- README.md
-    |-- Dockerfile
-    |-- pyproject.toml
-    |-- requirements.txt
-    |
-    |-- src/
-    |-- scripts/
-    |-- app/
-    |-- datos/
-    |-- modelos/
-    |-- tests/
+├── Dataset.tar.gz
+├── README.md
+├── pyproject.toml
+├── scripts/
+├── src/
+├── tests/
+├── datos/
+└── modelos/
 ```
 
-No es necesario descomprimir el dataset manualmente.
+El script `scripts/montar.py` se encarga de:
 
-El script de montaje se encarga de extraer las fotografías
-en `datos/fotos/`.
+1. Extraer las fotografías del dataset, si todavía no están disponibles.
+2. Incorporar las imágenes adicionales de `datos/extra/`.
+3. Detectar y alinear los rostros.
+4. Preparar los templates biométricos mediante PCA.
+5. Crear o reutilizar la clave secreta del sistema.
+6. Inscribir las identidades en la base de datos.
+7. Calcular un umbral provisional de comparación.
 
-El sistema también incorpora fotografías adicionales
-en `datos/extra/`, incluyendo las de Álvaro Arbeloa.
+### 4.1. Primera ejecución
 
-## 4. Montaje inicial del sistema
+Con `uv`:
 
-Una vez instaladas las dependencias y colocado el dataset,
-ejecuta:
+```powershell
+py -m uv run --locked --extra dev python scripts/montar.py
+```
 
-```bash
+Con el entorno virtual activado:
+
+```powershell
 python scripts/montar.py
 ```
 
-Este script realiza automáticamente las siguientes operaciones:
+Durante la ejecución se muestra información sobre la detección de cada fotografía y los posibles problemas encontrados.
 
-1. Descomprime `Dataset.tar.gz` si todavía no se ha extraído.
-2. Reúne las fotografías del profesor y las adicionales.
-3. Detecta y alinea las caras.
-4. Comprueba la calidad de las fotografías e informa de posibles problemas.
-5. Carga el extractor PCA genérico.
-6. Genera una clave criptográfica si todavía no existe.
-7. Inscribe las identidades en la base de datos CSV.
-8. Calcula un umbral provisional de reconocimiento.
+Al finalizar, se indica el número de personas inscritas y el umbral provisional calculado.
 
-Al finalizar, muestra información sobre las fotografías procesadas,
-las personas inscritas y el umbral obtenido.
+### 4.2. Protección frente a reconstrucciones accidentales
 
-### Umbral de reconocimiento
+**El script no reconstruye automáticamente un sistema que ya esté montado.**
 
-El sistema compara templates mediante distancia coseno.
+Si detecta que existe una base de datos, su firma o un modelo generado previamente, detiene la ejecución para evitar sobrescribir información por accidente.
 
-Por defecto, `montar.py` calcula un umbral provisional
-a partir de las distancias entre personas distintas.
+Para reconstruir deliberadamente el sistema, debe utilizarse:
 
-También es posible especificar uno manualmente:
+```powershell
+py -m uv run --locked --extra dev python scripts/montar.py --recrear
+```
 
-```bash
+O, con el entorno virtual activado:
+
+```powershell
+python scripts/montar.py --recrear
+```
+
+**Advertencia:** `--recrear` reconstruye la base de datos y el modelo operativo. Los templates y resultados de inscripción anteriores se sustituyen por los de la nueva ejecución.
+
+La clave secreta existente se conserva.
+
+Por tanto, debe utilizarse `--recrear` únicamente cuando se quiera volver a montar el sistema de forma consciente.
+
+### 4.3. Umbral de decisión
+
+Por defecto, `montar.py` calcula un **umbral provisional** a partir de las distancias entre identidades diferentes.
+
+Se puede ajustar la proporción utilizada en ese cálculo:
+
+```powershell
+python scripts/montar.py --far 0.02
+```
+
+También se puede fijar manualmente un umbral:
+
+```powershell
 python scripts/montar.py --umbral 0.45
 ```
 
-**Importante:** el umbral calculado durante el montaje es
-provisional y no equivale a una FAR medida sobre fotografías
-independientes.
+Si ya existe un sistema montado y se desea reconstruirlo con otro umbral, será necesario añadir `--recrear`.
 
-### Advertencia sobre el montaje
+**Importante:** el umbral calculado automáticamente durante el montaje es provisional. No constituye por sí solo una evaluación biométrica completa.
 
-Volver a ejecutar `montar.py` reconstruye la base de datos
-y puede sobrescribir los resultados de inscripciones anteriores.
-
-Por tanto, no debe ejecutarse nuevamente si se desea conservar
-la base de datos actual.
-
-La clave criptográfica existente se conserva, salvo que
-se elimine expresamente.
+Para evaluar correctamente el sistema será necesario utilizar fotografías independientes de las empleadas en la inscripción y calcular métricas como FAR y FRR.
 
 ## 5. Interfaz web
 
-Una vez montado el sistema, ejecuta:
+Una vez montado el sistema, puede iniciarse la aplicación:
 
-```bash
+Con `uv`:
+
+```powershell
+py -m uv run --locked --extra dev python app/web.py
+```
+
+Con el entorno virtual activado:
+
+```powershell
 python app/web.py
 ```
 
-Abre un navegador y accede a:
+La interfaz estará disponible en:
 
 http://localhost:5000
 
-La interfaz permite:
+Desde ella es posible:
 
-- Subir una fotografía facial.
-- Visualizar la detección de la cara y los ojos.
-- Observar la cara alineada y normalizada.
-- Visualizar una reconstrucción aproximada mediante PCA.
-- Identificar a la persona más parecida.
-- Verificar una identidad seleccionada.
-- Consultar los cinco candidatos más cercanos.
-- Observar las distancias y el umbral de decisión.
+- Subir fotografías faciales.
+- Visualizar la detección y el procesamiento de la cara.
+- Realizar operaciones de identificación y verificación.
+- Consultar los candidatos más parecidos.
+- Observar las distancias y el umbral utilizados en la decisión.
 
-La confianza mostrada en la interfaz es una medida relativa
-entre los candidatos, no una probabilidad calibrada de identidad.
+## 6. Ejecución desde la línea de comandos
 
-## 6. Ejecución desde la terminal
-
-El repositorio incluye scripts para realizar operaciones
-sin utilizar la interfaz web.
+El repositorio también incluye scripts para realizar operaciones biométricas sin utilizar la interfaz web.
 
 ### Identificación
 
-```bash
-python scripts/identificar.py <ruta_fotografia>
-```
-
-Ejemplo:
-
-```bash
+```powershell
 python scripts/identificar.py foto.jpg
 ```
 
 ### Verificación
 
-```bash
-python scripts/verificar.py <identidad> <ruta_fotografia>
+```powershell
+python scripts/verificar.py identificador foto.jpg
 ```
+
+Ambos scripts admiten la opción `--sd`, destinada a trabajar con imágenes faciales ya recortadas.
+
+## 7. Uso como librería
+
+Las operaciones principales se encuentran disponibles mediante la API de `sistema`.
 
 Ejemplo:
 
-```bash
-python scripts/verificar.py adele foto.jpg
-```
-
-Ambos scripts admiten la opción `--sd` cuando se proporciona
-una imagen con la cara previamente recortada.
-
-## 7. API del sistema
-
-El sistema implementa los nueve métodos exigidos por el enunciado.
-
-| Entrada | Inscripción | Verificación | Identificación |
-|---|---|---|---|
-| Fotografía | `inscribir(id, foto)` | `verificar(id, foto)` | `identificar(foto)` |
-| Fotografía sin detección inicial | `inscribir_sd(id, foto)` | `verificar_sd(id, foto)` | `identificar_sd(foto)` |
-| Template | `inscribir_t(id, template)` | `verificar_t(id, template)` | `identificar_t(template)` |
-
-### Utilización como librería
-
-Una vez instalado el paquete:
-
 ```python
+import sys
+sys.path.insert(0, "src")
+
 from sistema import inscribir, verificar, identificar
 
-# Identificación
 resultado = identificar("foto.jpg")
-
-# Verificación
-valido = verificar("alvaro_arbeloa_coca", "foto.jpg")
+es_correcto = verificar("adele", "foto.jpg")
 ```
 
-Los métodos de verificación devuelven `True` o `False`.
+La API incluye tres modalidades de entrada:
 
-Los métodos de identificación devuelven el identificador
-de la persona reconocida o `None` si no se supera el umbral.
+| Modalidad | Inscripción | Verificación | Identificación |
+|---|---|---|---|
+| Fotografía | `inscribir(id, foto)` | `verificar(id, foto)` | `identificar(foto)` |
+| Sin detector inicial | `inscribir_sd(id, foto)` | `verificar_sd(id, foto)` | `identificar_sd(foto)` |
+| Template | `inscribir_t(id, template)` | `verificar_t(id, template)` | `identificar_t(template)` |
 
-Las fotografías pueden proporcionarse como rutas,
-bytes o arrays de NumPy.
+La modalidad `_t` permite trabajar directamente con templates.
 
-Los identificadores se obtienen del nombre del archivo
-del dataset eliminando el año y la extensión.
+La modalidad `_sd` evita la detección y el alineamiento iniciales, aunque algunas operaciones mantienen comprobaciones adicionales de seguridad mediante YuNet.
 
-Por ejemplo:
+## 8. Extractor PCA
 
-```text
-serenna_williams_2017.jpg -> serenna_williams
-```
+El sistema utiliza **PCA (Principal Component Analysis)** para reducir la dimensionalidad de las imágenes faciales y obtener sus representaciones biométricas.
 
-## 8. Extractor PCA genérico
-
-El reconocimiento utiliza un modelo PCA preentrenado
-que se encuentra en:
+El repositorio contiene un extractor PCA genérico en:
 
 ```text
 modelos/pca_base.npz
 ```
 
-El modelo se entrenó utilizando 6.300 caras de FairFace
-(Kärkkäinen y Joo, 2021; CC BY 4.0), con 900 muestras
-de cada uno de sus siete grupos étnicos.
+Este modelo se entrenó previamente utilizando imágenes de FairFace, de manera independiente a las identidades inscritas en el sistema.
 
-Referencia:
+La implementación actual combina características obtenidas de la cara completa y de una región interior de la cara.
 
-https://github.com/joojs/fairface
+Los coeficientes se normalizan y los templates se comparan mediante distancia coseno.
 
-El sistema utiliza dos representaciones PCA:
+### Comportamiento actual del montaje
 
-- 50 componentes correspondientes a la cara completa.
-- 50 componentes correspondientes al interior de la cara.
+Cuando `modelos/pca_base.npz` está disponible, `montar.py` lo carga y comprueba que su huella coincide con la esperada.
 
-Por tanto, el template facial contiene 100 características.
+**Limitación pendiente de corregir:** si no encuentra ese archivo, la versión actual del script todavía puede entrenar un PCA alternativo utilizando las propias fotografías de inscripción.
 
-Los coeficientes PCA se blanquean dividiendo cada componente
-por su desviación típica.
+Este comportamiento se revisará para garantizar que todas las ejecuciones utilicen el mismo extractor genérico.
 
-Los templates se comparan mediante distancia coseno,
-donde los valores menores indican mayor similitud.
+## 9. Control de calidad de las imágenes
 
-### Independencia del extractor
+El sistema incorpora comprobaciones orientadas a detectar fotografías que puedan dificultar el reconocimiento.
 
-El modelo PCA genérico es independiente de las personas inscritas.
-
-Esto permite incorporar nuevas identidades sin tener
-que volver a entrenar el extractor.
-
-Las inscripciones se almacenan en la base de datos,
-pero no modifican las eigenfaces del modelo genérico.
-
-Es importante conservar `modelos/pca_base.npz`.
-Si falta, la implementación actual de `montar.py` puede
-entrenar un PCA alternativo con las fotografías inscritas,
-lo que cambiaría las características del sistema.
-
-### Regeneración del modelo PCA
-
-No es necesario regenerar el modelo para ejecutar la práctica.
-
-El procedimiento de entrenamiento se encuentra en:
-
-```bash
-python scripts/entrenar_pca.py
-```
-
-Requiere obtener el conjunto de entrenamiento genérico
-descrito en dicho script y las dependencias adicionales
-correspondientes, como `pyarrow`.
-
-El modelo genérico está asociado a una huella de integridad
-definida en `src/sistema/config.py`.
-
-Si se genera deliberadamente un modelo diferente,
-debe actualizarse esa huella.
-
-## 9. Control de calidad
-
-El sistema realiza comprobaciones de calidad durante
-las operaciones de verificación e identificación.
-
-Entre las condiciones que pueden provocar un rechazo están:
+Entre las condiciones contempladas se encuentran:
 
 | Condición | Descripción |
 |---|---|
-| `varias_caras` | Se detectan varias caras de tamaño comparable. |
-| `cara_pequena` | Distancia insuficiente entre los ojos. |
-| `perfil` | La cara presenta una orientación demasiado lateral. |
-| `ojos_ocultos` | Los ojos aparecen tapados u oscurecidos. |
-| `boca_oculta` | La región de nariz y boca presenta características compatibles con una oclusión. |
+| Varias caras | Hay más de un rostro relevante en la fotografía. |
+| Cara pequeña | El rostro no tiene suficiente resolución. |
+| Perfil | La orientación de la cara se aleja de una posición frontal. |
+| Ojos ocultos | La región de los ojos presenta características compatibles con una oclusión. |
+| Boca oculta | La región inferior de la cara presenta características compatibles con una oclusión. |
 
-Cuando no se encuentra una cara válida, se lanza
-la excepción `CaraNoEncontrada`.
+Si no se encuentra ningún rostro, puede producirse la excepción `CaraNoEncontrada`.
 
-Si la fotografía no supera los controles de calidad,
-puede lanzarse `CalidadInsuficiente`.
+Si la fotografía no satisface los criterios de calidad, puede producirse `CalidadInsuficiente`.
 
-Durante la inscripción, el sistema informa de problemas
-de calidad, pero permite incorporar las fotografías
-proporcionadas para la práctica.
+Estos controles son heurísticos y deberán tenerse en cuenta al estudiar las fortalezas y debilidades del sistema.
 
-Los métodos `_sd` reciben imágenes previamente recortadas.
-En la implementación actual, `verificar_sd` e
-`identificar_sd` también realizan una comprobación auxiliar
-con YuNet para descartar entradas que no parezcan caras.
+## 10. Medidas de seguridad
 
-## 10. Seguridad
+La implementación incorpora distintas defensas para proteger los datos biométricos y detectar modificaciones no autorizadas.
 
-El sistema incorpora mecanismos de protección frente
-a determinadas manipulaciones de la base de datos,
-los modelos y las entradas.
-
-El supuesto de seguridad es que un atacante puede conocer
-el código, el modelo y la base de datos, pero no dispone
-de la clave criptográfica secreta.
-
-### Protecciones implementadas
-
-| Defensa | Objetivo |
+| Medida | Objetivo |
 |---|---|
-| AES-256-GCM | Cifrar y autenticar los templates almacenados. |
-| HMAC de `bd.csv` | Detectar modificaciones no autorizadas de la base de datos. |
-| HMAC de `pca.npz` | Detectar modificaciones del modelo o su umbral. |
-| Huella del modelo PCA genérico | Comprobar la identidad del extractor preentrenado. |
-| Validación de templates | Rechazar vectores con dimensiones o valores inválidos. |
-| Error de reconstrucción PCA | Detectar determinadas entradas alejadas del espacio de caras. |
-| Validación de identificadores | Evitar caracteres peligrosos en los IDs. |
-| Límite de tamaño de imágenes | Mitigar imágenes excesivamente grandes. |
-| Limitación de peticiones web | Reducir consultas automatizadas a la interfaz. |
+| Cifrado AES-256-GCM | Proteger los templates almacenados en la base de datos. |
+| Firma HMAC de la base de datos | Detectar modificaciones en el archivo CSV. |
+| Firma HMAC del modelo operativo | Detectar cambios no autorizados en el modelo y su umbral. |
+| Verificación de la huella del PCA genérico | Comprobar la identidad del extractor utilizado. |
+| Validación de templates | Rechazar determinadas representaciones anómalas. |
+| Validación de identificadores | Evitar entradas no permitidas en los identificadores. |
+| Límites en el procesamiento de imágenes | Reducir riesgos asociados a entradas excesivamente grandes. |
+| Limitación de peticiones web | Dificultar determinados ataques repetitivos. |
 
-### Clave criptográfica
-
-Durante el montaje se genera una clave secreta en:
+La clave secreta se almacena por defecto en:
 
 ```text
 datos/clave.key
 ```
 
-Este archivo no debe subirse a GitHub.
+Este archivo no debe incluirse en Git.
 
-Alternativamente, es posible proporcionar la clave
-mediante la variable de entorno `SISTEMA_CLAVE`.
+El sistema también permite configurar la clave mediante variables de entorno.
 
-El sistema utiliza la clave para proteger los templates
-y verificar la integridad de la base de datos y del modelo.
+**Limitación conocida:** la protección de integridad de la base de datos presupone que se dispone de los archivos necesarios para verificarla. La eliminación simultánea de la base de datos y su firma es un escenario que debe tratarse separadamente durante la evaluación de seguridad.
 
-Estas defensas dependen de que la clave permanezca protegida.
+## 11. Tests automatizados
 
-Los mecanismos implementados no garantizan la ausencia
-de ataques, por lo que deben evaluarse sus limitaciones.
-
-## 11. Tests automáticos
-
-El repositorio incluye pruebas automáticas mediante `pytest`.
+El repositorio dispone de pruebas unitarias en `tests/`.
 
 Para ejecutarlas:
 
-```bash
-python -m pytest -q
+```powershell
+py -m uv run --locked --extra dev python -m pytest -q
 ```
 
-Los tests comprueban diferentes componentes del sistema:
+Las pruebas cubren diferentes componentes del sistema, incluyendo operaciones de la API, detección, calidad, templates y mecanismos de seguridad.
 
-- Procesamiento de imágenes.
-- Detección y preprocesado facial.
-- Extracción PCA.
-- Comparación de templates.
-- Base de datos CSV.
-- Funcionamiento de la API.
-- Control de calidad.
-- Mecanismos de seguridad.
+Los tests emplean datos preparados para las pruebas y no requieren el dataset original del profesor.
 
-Los tests utilizan principalmente datos sintéticos
-y no requieren el dataset del profesor.
+Se ha comprobado su ejecución en Windows con OpenCV 4.x.
 
-**Importante:** superar estos tests demuestra que se cumplen
-determinadas comprobaciones funcionales, pero no garantiza
-una buena precisión biométrica sobre fotografías desconocidas.
+### Integración continua
 
-## 12. Ejecución mediante Docker
+El repositorio incluye un workflow de GitHub Actions en:
 
-Docker permite ejecutar el sistema sin instalar manualmente
-Python ni sus dependencias en el equipo anfitrión.
+```text
+.github/workflows/tests.yml
+```
 
-### 12.1. Construcción de la imagen
+Este workflow permite ejecutar automáticamente los tests en GitHub.
 
-Desde la raíz del repositorio:
+La ejecución local de `pytest` sigue siendo recomendable antes de realizar commits o publicar cambios.
 
-```bash
+## 12. Ejecución con Docker
+
+El repositorio incluye un `Dockerfile` para ejecutar el sistema sin instalar manualmente sus dependencias de Python.
+
+El archivo `Dataset.tar.gz` debe encontrarse en la raíz del proyecto.
+
+### Construcción de la imagen
+
+```powershell
 docker build -t pca-biometricos .
 ```
 
-La imagen incluye:
-
-- Código fuente del sistema.
-- Dependencias de Python.
-- Detector facial YuNet.
-- Modelo PCA genérico (`modelos/pca_base.npz`).
-- Fotografías adicionales incluidas en el repositorio.
-
-El dataset del profesor no se incorpora a la imagen.
-
-### 12.2. Ejecución del contenedor
-
-Coloca `Dataset.tar.gz` en la raíz del repositorio.
-
-Desde PowerShell:
+### Ejecución en PowerShell
 
 ```powershell
 docker run --rm -p 5000:5000 --mount "type=bind,source=${PWD}/Dataset.tar.gz,target=/app/Dataset.tar.gz,readonly" pca-biometricos
 ```
 
-En Linux/macOS se puede utilizar el mismo comando desde
-una terminal Bash.
+El dataset se proporciona al contenedor mediante un montaje de solo lectura.
 
-El contenedor:
+De este modo, no es necesario incorporar el archivo del profesor dentro de la imagen Docker.
 
-1. Recibe el dataset mediante un volumen de solo lectura.
-2. Descomprime las fotografías.
-3. Monta el sistema biométrico.
-4. Inscribe las identidades.
-5. Inicia la aplicación web.
+La imagen sí debe incluir los recursos del repositorio necesarios para ejecutar el extractor y los detectores.
 
-Una vez iniciado, accede a:
+Una vez iniciado el contenedor, la aplicación está disponible en:
 
 http://localhost:5000
 
-### 12.3. Consideraciones
+**Importante:** en esta configuración, la base de datos y los archivos generados se almacenan dentro del contenedor. Al eliminarlo con `--rm`, esos resultados no se conservan.
 
-- El modelo PCA genérico está incluido en la imagen.
-- El dataset permanece fuera de la imagen.
-- El puerto 5000 permite acceder a la aplicación desde el navegador.
-- Al utilizar `--rm`, los archivos generados dentro del contenedor
-  desaparecen cuando se elimina.
-
-Para realizar experimentos y conservar modelos, bases de datos
-o resultados, se recomienda utilizar la instalación local.
+Para conservar los datos entre ejecuciones sería necesario configurar volúmenes adicionales.
 
 ## 13. Estructura del repositorio
 
-| Ruta | Descripción |
+| Ruta | Contenido |
 |---|---|
-| `src/sistema/` | Implementación principal del sistema biométrico. |
-| `src/sistema/api.py` | Los nueve métodos de inscripción, verificación e identificación. |
-| `src/sistema/detector.py` | Detector facial y alineamiento. |
-| `src/sistema/pca.py` | Entrenamiento, extracción y reconstrucción PCA. |
-| `src/sistema/comparador.py` | Comparación de templates. |
-| `src/sistema/bd.py` | Gestión de la base de datos CSV. |
-| `src/sistema/seguridad.py` | Cifrado, firmas y gestión de claves. |
-| `app/web.py` | Interfaz web. |
-| `scripts/` | Montaje y operaciones desde terminal. |
-| `modelos/face_detection_yunet_2023mar.onnx` | Detector facial YuNet. |
-| `modelos/pca_base.npz` | Extractor PCA genérico preentrenado. |
-| `datos/extra/` | Fotografías adicionales de inscripción. |
-| `datos/ojos_manuales.json` | Coordenadas de ojos para alineamiento manual. |
-| `tests/` | Pruebas automáticas. |
+| `app/` | Aplicación web. |
+| `src/sistema/` | Implementación de la librería biométrica. |
+| `scripts/montar.py` | Preparación e inscripción inicial del sistema. |
+| `scripts/identificar.py` | Identificación mediante línea de comandos. |
+| `scripts/verificar.py` | Verificación mediante línea de comandos. |
+| `scripts/entrenar_pca.py` | Entrenamiento del extractor PCA genérico. |
+| `datos/extra/` | Fotografías adicionales utilizadas en el proyecto. |
+| `datos/ojos_manuales.json` | Referencias manuales para determinadas fotografías. |
+| `modelos/pca_base.npz` | Extractor PCA genérico. |
+| `modelos/face_detection_yunet_2023mar.onnx` | Modelo de detección facial YuNet. |
+| `tests/` | Pruebas automatizadas. |
+| `.github/workflows/tests.yml` | Ejecución automática de tests en GitHub Actions. |
+| `Dockerfile` | Configuración de la imagen Docker. |
+| `pyproject.toml` | Configuración del proyecto y sus dependencias. |
+| `uv.lock` | Versiones bloqueadas de las dependencias. |
+| `Prácticas.md` | Enunciado original de la práctica. |
 
-### Archivos generados
+Durante el montaje se generan archivos que no deben subirse al repositorio, entre ellos:
 
-Al ejecutar `montar.py` se generan archivos que no se
-incluyen en GitHub:
+- `datos/fotos/`: fotografías extraídas del dataset.
+- `datos/bd.csv`: base de datos biométrica.
+- `datos/bd.firma`: firma de integridad de la base de datos.
+- `datos/clave.key`: clave secreta.
+- `datos/inscritos.json`: información de las fotografías inscritas.
+- `modelos/pca.npz`: modelo operativo y umbral.
 
-```text
-datos/fotos/
-datos/bd.csv
-datos/bd.firma
-datos/inscritos.json
-datos/clave.key
-modelos/pca.npz
-```
+Los directorios `.venv/` y `.pytest_cache/` también son archivos locales generados automáticamente y no deben versionarse.
 
-Estos archivos contienen los datos de inscripción,
-la información criptográfica o los resultados del montaje.
+## 14. Estado del proyecto y evaluación pendiente
 
-## 14. Configuración
+El repositorio implementa las funciones principales del sistema biométrico facial y dispone de pruebas automatizadas.
 
-El comportamiento del sistema puede modificarse mediante
-variables de entorno.
+Se han realizado correcciones relacionadas con:
 
-Entre las disponibles se encuentran:
+- La compatibilidad de OpenCV.
+- La carga de los clasificadores Haar en rutas de Windows con caracteres Unicode.
+- La ejecución mediante Docker.
+- Las instrucciones de instalación y ejecución.
+- La protección frente a reconstrucciones accidentales de la base de datos.
+- La integración de pruebas mediante GitHub Actions.
 
-| Variable | Función |
-|---|---|
-| `SISTEMA_DATASET` | Ruta del dataset comprimido. |
-| `SISTEMA_FOTOS` | Carpeta de fotografías de inscripción. |
-| `SISTEMA_EXTRA` | Carpeta de fotografías adicionales. |
-| `SISTEMA_BD` | Ruta de la base de datos CSV. |
-| `SISTEMA_MODELO` | Ruta del modelo PCA utilizado. |
-| `SISTEMA_UMBRAL` | Sobrescribe el umbral de reconocimiento. |
-| `SISTEMA_CLAVE` | Clave criptográfica proporcionada por variable de entorno. |
-| `SISTEMA_CLAVE_FICHERO` | Ruta del archivo de clave. |
-| `MAX_ANALISIS` | Límite de análisis por minuto en la interfaz web. |
+Queda pendiente desarrollar un protocolo de evaluación específico que permita medir el rendimiento y estudiar las limitaciones del sistema.
 
-La configuración predeterminada está definida en:
+La evaluación deberá considerar, entre otros aspectos:
 
-```text
-src/sistema/config.py
-```
+- La separación entre imágenes de inscripción y de prueba.
+- El rendimiento en verificación e identificación.
+- Las tasas de falsa aceptación y falso rechazo.
+- La selección y justificación del umbral.
+- El comportamiento ante variaciones de las fotografías.
+- La influencia de la detección y del control de calidad.
+- La resistencia y las limitaciones de las medidas de seguridad.
+- La facilidad de instalación y reproducción del sistema.
+
+Los resultados de esa evaluación se incorporarán posteriormente al informe y a la presentación de la práctica.

@@ -68,7 +68,28 @@ def main():
                    help="fracción de impostores que se aceptaría con el umbral (por defecto 2%%)")
     p.add_argument("--umbral", type=float, default=None,
                    help="fijar el umbral a mano (p. ej. 0.45, el calibrado con evaluacion/calibrar_umbral.py)")
+    
+    p.add_argument(
+    "--recrear",
+    action="store_true",
+    help="Reconstruye la base de datos y el modelo, reemplazando la inscripción anterior"
+    )
+    
     args = p.parse_args()
+    # Evitar reconstrucciones accidentales de una instalación existente.
+    if not args.recrear:
+        bd_existente = (
+            config.RUTA_BD.exists()
+            or config.RUTA_BD.with_suffix(".firma").exists()
+            or config.RUTA_MODELO.exists()
+        )
+
+        if bd_existente:
+            sys.exit(
+                "Ya existe una inscripción. El montaje se ha cancelado "
+                "para evitar sobrescribir la base de datos y el modelo.\n"
+                "Si deseas reconstruirlos, ejecuta montar.py con --recrear."
+            )
 
     fotos = preparar_fotos()
 
