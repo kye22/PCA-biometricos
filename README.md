@@ -101,6 +101,7 @@ PCA-biometricos/
 ├── scripts/
 ├── src/
 ├── tests/
+├── evaluacion/
 ├── datos/
 └── modelos/
 ```
@@ -108,7 +109,7 @@ PCA-biometricos/
 El script `scripts/montar.py` se encarga de:
 
 1. Extraer las fotografías del dataset, si todavía no están disponibles.
-2. Incorporar las imágenes adicionales de `datos/extra/`.
+2. Seleccionar las fotografías que deben inscribirse.
 3. Detectar y alinear los rostros.
 4. Cargar el extractor PCA genérico y preparar los templates biométricos.
 5. Crear o reutilizar la clave secreta del sistema.
@@ -133,22 +134,97 @@ Durante la ejecución se muestra información sobre la detección de cada fotogr
 
 Al finalizar, se indica el número de personas inscritas y el umbral provisional calculado.
 
-### 4.2. Protección frente a reconstrucciones accidentales
+**Atención:** sin `--manifiesto`, el script conserva el comportamiento original del repositorio y utiliza tanto las fotografías del profesor como las adicionales de `datos/extra/`.
+
+Para realizar una evaluación independiente, debe utilizarse el manifiesto de inscripción descrito a continuación.
+
+### 4.2. Separación de fotografías para evaluación
+
+Una evaluación biométrica debe evitar que las mismas fotografías se utilicen simultáneamente para inscribir identidades y para medir el rendimiento del sistema.
+
+Para ello se incluye el script:
+
+```text
+evaluacion/particiones.py
+```
+
+Este script genera una distribución reproducible de las imágenes utilizando una semilla fija.
+
+Se distinguen cuatro grupos:
+
+| Grupo | Utilización |
+|---|---|
+| `inscripcion` | Fotografías para construir la base de datos biométrica. |
+| `calibracion` | Fotografías reservadas para seleccionar el umbral. |
+| `prueba` | Fotografías reservadas para medir el rendimiento final. |
+| `desconocidos` | Fotografías de personas no inscritas, si están disponibles. |
+
+La distribución utilizada por el proyecto reserva las fotografías originales del profesor para inscripción, junto con la fotografía principal de Álvaro Arbeloa.
+
+Las fotografías adicionales se destinan a calibración o prueba.
+
+#### Generar la partición
+
+Con `uv`:
+
+```powershell
+py -m uv run --locked --extra dev python evaluacion/particiones.py --semilla 42
+```
+
+Con el entorno activado:
+
+```powershell
+python evaluacion/particiones.py --semilla 42
+```
+
+Se genera el archivo:
+
+```text
+evaluacion/particion.json
+```
+
+El manifiesto contiene las rutas relativas de las fotografías asignadas a cada grupo.
+
+La generación comprueba que no existan solapamientos indebidos entre los grupos. También utiliza hashes SHA-256 para detectar archivos con contenido exactamente idéntico.
+
+Esta comprobación no sustituye una inspección manual de imágenes visualmente duplicadas o casi idénticas.
+
+### 4.3. Montaje utilizando el manifiesto
+
+Una vez generado el manifiesto, se puede montar el sistema utilizando únicamente las fotografías de inscripción:
+
+```powershell
+python scripts/montar.py --manifiesto evaluacion/particion.json
+```
+
+Con `uv`:
+
+```powershell
+py -m uv run --locked --extra dev python scripts/montar.py --manifiesto evaluacion/particion.json
+```
+
+El script carga el manifiesto, comprueba su validez y utiliza exclusivamente las imágenes del grupo `inscripcion`.
+
+**Las fotografías de calibración y prueba no se utilizan para crear templates de inscripción.**
+
+Este procedimiento es el recomendado para preparar el sistema antes de evaluarlo.
+
+### 4.4. Protección frente a reconstrucciones accidentales
 
 **El script no reconstruye automáticamente un sistema que ya esté montado.**
 
 Si detecta que existe una base de datos, su firma o un modelo generado previamente, detiene la ejecución para evitar sobrescribir información por accidente.
 
-Para reconstruir deliberadamente el sistema, debe utilizarse:
+Para reconstruir deliberadamente el sistema utilizando el manifiesto:
 
 ```powershell
-py -m uv run --locked --extra dev python scripts/montar.py --recrear
+python scripts/montar.py --manifiesto evaluacion/particion.json --recrear
 ```
 
-O, con el entorno virtual activado:
+Con `uv`:
 
 ```powershell
-python scripts/montar.py --recrear
+py -m uv run --locked --extra dev python scripts/montar.py --manifiesto evaluacion/particion.json --recrear
 ```
 
 **Advertencia:** `--recrear` reconstruye la base de datos y el modelo operativo. Los templates y resultados de inscripción anteriores se sustituyen por los de la nueva ejecución.
@@ -157,7 +233,7 @@ La clave secreta existente se conserva.
 
 Por tanto, debe utilizarse `--recrear` únicamente cuando se quiera volver a montar el sistema de forma consciente.
 
-### 4.3. Extractor genérico obligatorio
+### 4.5. Extractor genérico obligatorio
 
 El montaje necesita el archivo:
 
@@ -173,9 +249,24 @@ En ese caso, `montar.py` cancela la ejecución y muestra un mensaje de error.
 
 Además, cuando el archivo está presente, se verifica que su huella coincide con la establecida en `config.HUELLA_MODELO_BASE`.
 
-Estas comprobaciones permiten mantener un extractor consistente entre diferentes montajes y evitan sustituirlo accidentalmente por otro modelo.
+Estas comprobaciones permiten mantener un extractor consistente entre diferentes montajes.
 
-### 4.4. Umbral de decisión
+### 4.6. Validaciones previas al montaje
+
+Antes de modificar la base de datos, el script realiza varias comprobaciones:
+
+- Que los parámetros introducidos sean válidos.
+- Que exista el extractor PCA genérico.
+- Que haya suficientes identidades para calcular el umbral provisional.
+- Que las fotografías puedan detectarse y alinearse correctamente.
+
+Si una fotografía falla durante la fase inicial de detección o alineamiento, el montaje se cancela antes de reconstruir la base de datos.
+
+Esto reduce el riesgo de generar una inscripción incompleta.
+
+No obstante, el montaje todavía no implementa una sustitución completamente transaccional de todos los archivos: un fallo inesperado posterior podría producir una escritura parcial.
+
+### 4.7. Umbral de decisión
 
 Por defecto, `montar.py` calcula un **umbral provisional** a partir de las distancias entre identidades diferentes.
 
@@ -195,7 +286,7 @@ Si ya existe un sistema montado y se desea reconstruirlo con otro umbral, será 
 
 **Importante:** el umbral calculado automáticamente durante el montaje es provisional. No constituye por sí solo una evaluación biométrica completa.
 
-Para evaluar correctamente el sistema será necesario utilizar fotografías independientes de las empleadas en la inscripción y calcular métricas como FAR y FRR.
+Para evaluar correctamente el sistema será necesario utilizar las fotografías independientes reservadas y calcular métricas como FAR y FRR.
 
 ## 5. Interfaz web
 
@@ -300,7 +391,7 @@ Por tanto:
 - Los templates se obtienen utilizando una representación común.
 - El montaje no sustituye el extractor por otro entrenado con los propios inscritos.
 
-Esta separación entre entrenamiento del extractor e inscripción es importante para la evaluación del sistema biométrico.
+La separación entre el entrenamiento del extractor, la inscripción y la evaluación es importante para interpretar correctamente los resultados biométricos.
 
 ## 9. Control de calidad de las imágenes
 
@@ -361,9 +452,9 @@ py -m uv run --locked --extra dev python -m pytest -q
 
 Las pruebas cubren diferentes componentes del sistema, incluyendo operaciones de la API, detección, calidad, templates y mecanismos de seguridad.
 
-Los tests emplean datos preparados para las pruebas y no requieren el dataset original del profesor.
+También se incluyen pruebas para comprobar la reproducibilidad de las particiones y rechazar fotografías duplicadas entre grupos.
 
-Se ha comprobado su ejecución en Windows con OpenCV 4.x.
+Los tests emplean datos preparados para las pruebas y no requieren el dataset original del profesor.
 
 ### Integración continua
 
@@ -379,17 +470,19 @@ La ejecución local de `pytest` sigue siendo recomendable antes de realizar comm
 
 ## 12. Ejecución con Docker
 
-El repositorio incluye un `Dockerfile` para ejecutar el sistema sin instalar manualmente sus dependencias de Python.
+El repositorio incluye un `Dockerfile` que permite entregar el sistema a otro grupo sin que tenga que instalar manualmente sus dependencias de Python.
 
 El archivo `Dataset.tar.gz` debe encontrarse en la raíz del proyecto.
 
-### Construcción de la imagen
+### 12.1. Construir la imagen
+
+Desde PowerShell:
 
 ```powershell
 docker build -t pca-biometricos .
 ```
 
-### Ejecución en PowerShell
+### 12.2. Ejecutar el contenedor
 
 ```powershell
 docker run --rm -p 5000:5000 --mount "type=bind,source=${PWD}/Dataset.tar.gz,target=/app/Dataset.tar.gz,readonly" pca-biometricos
@@ -399,15 +492,37 @@ El dataset se proporciona al contenedor mediante un montaje de solo lectura.
 
 De este modo, no es necesario incorporar el archivo del profesor dentro de la imagen Docker.
 
-La imagen sí debe incluir los recursos del repositorio necesarios para ejecutar el extractor y los detectores.
+### 12.3. Montaje automático con particiones
 
-Una vez iniciado el contenedor, la aplicación está disponible en:
+Al iniciar el contenedor se ejecuta automáticamente el siguiente proceso:
+
+1. Se extraen las fotografías del dataset del profesor.
+2. Se genera una partición reproducible con semilla `42`.
+3. Se valida el manifiesto de partición.
+4. Se monta el sistema utilizando únicamente el grupo `inscripcion`.
+5. Se inicia la aplicación web.
+
+Las fotografías adicionales reservadas para calibración y prueba no se inscriben en la base de datos del contenedor.
+
+Esto permite entregar al grupo rival un sistema preparado para recibir fotografías nuevas, distintas de las utilizadas en la inscripción.
+
+### 12.4. Acceder a la aplicación
+
+Una vez iniciado el contenedor, abre:
 
 http://localhost:5000
 
-**Importante:** en esta configuración, la base de datos y los archivos generados se almacenan dentro del contenedor. Al eliminarlo con `--rm`, esos resultados no se conservan.
+Desde la interfaz web pueden realizarse operaciones de identificación y verificación.
+
+### 12.5. Persistencia de los datos
+
+En esta configuración, la base de datos y los archivos generados se almacenan dentro del contenedor.
+
+Al eliminarlo con `--rm`, esos resultados no se conservan.
 
 Para conservar los datos entre ejecuciones sería necesario configurar volúmenes adicionales.
+
+El extractor PCA genérico y los archivos necesarios para el funcionamiento del sistema sí están incluidos en la imagen Docker.
 
 ## 13. Estructura del repositorio
 
@@ -419,6 +534,7 @@ Para conservar los datos entre ejecuciones sería necesario configurar volúmene
 | `scripts/identificar.py` | Identificación mediante línea de comandos. |
 | `scripts/verificar.py` | Verificación mediante línea de comandos. |
 | `scripts/entrenar_pca.py` | Entrenamiento del extractor PCA genérico. |
+| `evaluacion/particiones.py` | Generación de particiones reproducibles. |
 | `datos/extra/` | Fotografías adicionales utilizadas en el proyecto. |
 | `datos/ojos_manuales.json` | Referencias manuales para determinadas fotografías. |
 | `modelos/pca_base.npz` | Extractor PCA genérico. |
@@ -426,6 +542,7 @@ Para conservar los datos entre ejecuciones sería necesario configurar volúmene
 | `tests/` | Pruebas automatizadas. |
 | `.github/workflows/tests.yml` | Ejecución automática de tests en GitHub Actions. |
 | `Dockerfile` | Configuración de la imagen Docker. |
+| `.dockerignore` | Exclusiones utilizadas al construir la imagen. |
 | `pyproject.toml` | Configuración del proyecto y sus dependencias. |
 | `uv.lock` | Versiones bloqueadas de las dependencias. |
 | `Prácticas.md` | Enunciado original de la práctica. |
@@ -438,6 +555,7 @@ Durante el montaje se generan archivos que no deben subirse al repositorio, entr
 - `datos/clave.key`: clave secreta.
 - `datos/inscritos.json`: información de las fotografías inscritas.
 - `modelos/pca.npz`: modelo operativo y umbral.
+- `evaluacion/particion.json`: manifiesto generado de las particiones.
 
 Los directorios `.venv/` y `.pytest_cache/` también son archivos locales generados automáticamente y no deben versionarse.
 
@@ -445,7 +563,7 @@ Los directorios `.venv/` y `.pytest_cache/` también son archivos locales genera
 
 El repositorio implementa las funciones principales del sistema biométrico facial y dispone de pruebas automatizadas.
 
-Se han realizado correcciones relacionadas con:
+Se han realizado correcciones y mejoras relacionadas con:
 
 - La compatibilidad de OpenCV.
 - La carga de los clasificadores Haar en rutas de Windows con caracteres Unicode.
@@ -453,13 +571,16 @@ Se han realizado correcciones relacionadas con:
 - Las instrucciones de instalación y ejecución.
 - La protección frente a reconstrucciones accidentales de la base de datos.
 - El uso obligatorio del PCA genérico durante el montaje.
+- La cancelación del montaje ante errores de detección iniciales.
+- La generación de particiones reproducibles.
+- El montaje mediante un manifiesto de inscripción.
+- La preparación de Docker para utilizar únicamente las fotografías de inscripción.
 - La integración de pruebas mediante GitHub Actions.
 
-Queda pendiente desarrollar un protocolo de evaluación específico que permita medir el rendimiento y estudiar las limitaciones del sistema.
+Queda pendiente desarrollar el protocolo de evaluación cuantitativa que permita medir el rendimiento y estudiar las limitaciones del sistema.
 
 La evaluación deberá considerar, entre otros aspectos:
 
-- La separación entre imágenes de inscripción y de prueba.
 - El rendimiento en verificación e identificación.
 - Las tasas de falsa aceptación y falso rechazo.
 - La selección y justificación del umbral.
@@ -468,4 +589,6 @@ La evaluación deberá considerar, entre otros aspectos:
 - La resistencia y las limitaciones de las medidas de seguridad.
 - La facilidad de instalación y reproducción del sistema.
 
-Los resultados de esa evaluación se incorporarán posteriormente al informe y a la presentación de la práctica.
+Se distinguirán los resultados de evaluación propia de los resultados obtenidos por el grupo rival con fotografías externas.
+
+Los resultados se incorporarán posteriormente al informe y a la presentación de la práctica.

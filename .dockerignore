@@ -12,3 +12,5 @@ datos/inscritos.json
 modelos/*.npz
 !modelos/pca_base.npz
 Dataset.tar.gz
+# El manifiesto se genera dentro del contenedor.
+evaluacion/particion.json
