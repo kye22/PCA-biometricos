@@ -39,7 +39,8 @@ datos/inscritos.json
 Prácticas.*
 !Prácticas.md
 Reconocimiento facial.webp
-ataques/
+# Scripts de ataques versionados; resultados temporales ignorados
+ataques/resultados/
 docs/
 # Scripts de evaluación versionados; resultados generados ignorados
 evaluacion/particion.json
