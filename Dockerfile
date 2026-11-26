@@ -1,14 +1,21 @@
-# Uso (con Dataset.tar.gz en la raíz del repo):
+# Reconocimiento facial PCA
+#
+# Construcción:
 #   docker build -t pca-biometricos .
-#   docker run --rm -p 5000:5000 pca-biometricos        -> http://localhost:5000
-# Monta el sistema (descomprime, entrena, inscribe) y arranca la interfaz web.
-# Como librería:  docker run --rm -it pca-biometricos python
+#
+# Ejecución:
+#   El dataset se proporciona mediante un volumen.
+#   No se incluye dentro de la imagen Docker.
+#
+# El modelo PCA genérico (modelos/pca_base.npz)
+# sí se incluye en la imagen.
+
 FROM python:3.11-slim
 
 WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN pip install --no-cache-dir -e ".[web]"
 COPY . .
 
 ENV HOST=0.0.0.0 PORT=5000

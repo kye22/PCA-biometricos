@@ -10,3 +10,5 @@ datos/bd.firma
 datos/clave.key
 datos/inscritos.json
 modelos/*.npz
+!modelos/pca_base.npz
+Dataset.tar.gz
