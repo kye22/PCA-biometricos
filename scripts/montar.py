@@ -32,17 +32,67 @@ from sistema.pca import ModeloPCA
 RUTA_OJOS_MANUALES = config.RAIZ / "datos" / "ojos_manuales.json"
 
 
-def preparar_fotos() -> list[tuple[str, object]]:
-    if not (config.RUTA_FOTOS.exists() and any(config.RUTA_FOTOS.iterdir())):
+def preparar_fotos(manifiesto: Path | None = None) -> list[tuple[str, Path]]:
+    """
+    Prepara las fotografías que se utilizarán para la inscripción.
+
+    Si se proporciona un manifiesto, utiliza exclusivamente las fotos
+    del grupo 'inscripcion'.
+
+    Sin manifiesto, mantiene el comportamiento original.
+    """
+
+    # Extraer el dataset del profesor si todavía no está disponible.
+    if not (
+        config.RUTA_FOTOS.exists()
+        and any(config.RUTA_FOTOS.iterdir())
+    ):
         if not config.RUTA_DATASET.exists():
-            sys.exit(f"No encuentro {config.RUTA_DATASET}. Ponlo en la raíz del repo.")
-        n = dataset.extraer_dataset(config.RUTA_DATASET, config.RUTA_FOTOS)
-        print(f"Descomprimido {config.RUTA_DATASET.name}: {n} fotos -> {config.RUTA_FOTOS}")
-    fotos = dataset.listar_inscripcion(config.RUTA_FOTOS, config.RUTA_EXTRA)
-    ids = [i for i, _ in fotos]
-    repetidos = {i for i in ids if ids.count(i) > 1}
+            sys.exit(
+                f"No encuentro {config.RUTA_DATASET}. "
+                "Ponlo en la raíz del repositorio."
+            )
+
+        n = dataset.extraer_dataset(
+            config.RUTA_DATASET,
+            config.RUTA_FOTOS
+        )
+
+        print(
+            f"Descomprimido {config.RUTA_DATASET.name}: "
+            f"{n} fotos -> {config.RUTA_FOTOS}"
+        )
+
+    # Seleccionar las fotografías de inscripción.
+    if manifiesto is not None:
+        grupos = dataset.leer_particion(manifiesto, config.RAIZ)
+        fotos = grupos["inscripcion"]
+
+        print(
+            f"Partición de inscripción: {manifiesto} "
+            f"({len(fotos)} fotografías)"
+        )
+    else:
+        # Comportamiento original, conservado por compatibilidad.
+        fotos = dataset.listar_inscripcion(
+            config.RUTA_FOTOS,
+            config.RUTA_EXTRA
+        )
+
+    # Avisar si alguna identidad tiene varias fotografías inscritas.
+    ids = [id_ for id_, _ in fotos]
+
+    repetidos = {
+        id_ for id_ in ids
+        if ids.count(id_) > 1
+    }
+
     if repetidos:
-        print(f"Aviso: ids con varias fotos (se inscriben todas): {sorted(repetidos)}")
+        print(
+            "Aviso: identidades con varias fotos "
+            f"de inscripción: {sorted(repetidos)}"
+        )
+
     return fotos
 
 
@@ -69,9 +119,16 @@ def main():
                    help="fijar el umbral a mano (p. ej. 0.45, el calibrado con evaluacion/calibrar_umbral.py)")
 
     p.add_argument(
-    "--recrear",
-    action="store_true",
-    help="Reconstruye la base de datos y el modelo, reemplazando la inscripción anterior"
+        "--recrear",
+        action="store_true",
+        help="Reconstruye la base de datos y el modelo, reemplazando la inscripción anterior"
+    )
+
+    p.add_argument(
+        "--manifiesto",
+        type=Path,
+        default=None,
+        help="archivo JSON que define las fotografías de inscripción"
     )
 
     args = p.parse_args()
@@ -106,7 +163,7 @@ def main():
             "alternativo con las personas inscritas."
         )
 
-    fotos = preparar_fotos()
+    fotos = preparar_fotos(args.manifiesto)
         # El cálculo del umbral necesita comparar identidades diferentes.
     identidades = {id_ for id_, _ in fotos}
 
