@@ -9,7 +9,7 @@ description = "Reconocimiento facial con PCA - Sistemas Biométricos"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
-    "opencv-python-headless>=4.8",
+    "opencv-python-headless>=4.8,<5",  #cambio se ha añadiddo <5
     "pillow>=11.3",   # lee AVIF (hay uno en el dataset con extensión .jpg)
     "cryptography>=41",   # AES-GCM para cifrar los templates de la BD
 ]
