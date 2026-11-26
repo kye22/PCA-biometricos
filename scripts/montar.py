@@ -76,6 +76,13 @@ def main():
 
     args = p.parse_args()
     # Evitar reconstrucciones accidentales de una instalación existente.
+        # Validar los parámetros antes de iniciar el montaje.
+    if not 0 < args.far < 1:
+        p.error("--far debe ser una fracción mayor que 0 y menor que 1")
+
+    if args.umbral is not None and not 0 <= args.umbral <= 2:
+        p.error("--umbral debe estar entre 0 y 2 (distancia coseno)")
+
     if not args.recrear:
         bd_existente = (
             config.RUTA_BD.exists()
@@ -100,6 +107,15 @@ def main():
         )
 
     fotos = preparar_fotos()
+        # El cálculo del umbral necesita comparar identidades diferentes.
+    identidades = {id_ for id_, _ in fotos}
+
+    if len(identidades) < 2:
+        sys.exit(
+            "ERROR: se necesitan al menos dos identidades diferentes "
+            "para calcular el umbral provisional."
+        )
+
 
     # --- 3. detección -------------------------------------------------------------
     print(f"\nDetección de caras ({len(fotos)} fotos):")
@@ -125,6 +141,21 @@ def main():
         validas.append((id_, f, det.cara if id_ in manuales else None))
         caras.append(preprocesado.normalizar(cara))
         print(f"  ok    {f.name:48s} {info}")
+
+    # No reconstruir el sistema si alguna fotografía ha fallado.
+    # Hasta este punto todavía no hemos borrado la BD ni guardado
+    # un nuevo modelo operativo.
+    if fallos:
+        nombres = ", ".join(nombre for _, nombre, _ in fallos)
+
+        sys.exit(
+            f"\nERROR: montaje cancelado.\n"
+            f"Han fallado {len(fallos)} fotografías: {nombres}\n\n"
+            "La base de datos y el modelo operativo existentes "
+            "no se han modificado.\n"
+            f"Revisa las fotografías o las coordenadas de "
+            f"{RUTA_OJOS_MANUALES.name} antes de repetir el montaje."
+        )
 
     # --- 4. extractor -------------------------------------------------------------
     # El extractor debe ser siempre el PCA genérico del repositorio.
@@ -185,9 +216,7 @@ def main():
     else:
         print(f"Umbral PROVISIONAL = {modelo.umbral:.3f} (acepta al {args.far:.0%} de los pares de "
               f"impostores; el falso rechazo se mide con fotos distintas de las inscritas)")
-    if fallos:
-        print(f"\nNO inscritos ({len(fallos)}): " + ", ".join(i for i, _, _ in fallos))
-        print(f"  -> para inscribirlos, marca sus ojos en {RUTA_OJOS_MANUALES.name}")
+
 
 
 if __name__ == "__main__":
