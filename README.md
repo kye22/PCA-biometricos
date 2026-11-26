@@ -110,7 +110,7 @@ El script `scripts/montar.py` se encarga de:
 1. Extraer las fotografías del dataset, si todavía no están disponibles.
 2. Incorporar las imágenes adicionales de `datos/extra/`.
 3. Detectar y alinear los rostros.
-4. Preparar los templates biométricos mediante PCA.
+4. Cargar el extractor PCA genérico y preparar los templates biométricos.
 5. Crear o reutilizar la clave secreta del sistema.
 6. Inscribir las identidades en la base de datos.
 7. Calcular un umbral provisional de comparación.
@@ -157,7 +157,25 @@ La clave secreta existente se conserva.
 
 Por tanto, debe utilizarse `--recrear` únicamente cuando se quiera volver a montar el sistema de forma consciente.
 
-### 4.3. Umbral de decisión
+### 4.3. Extractor genérico obligatorio
+
+El montaje necesita el archivo:
+
+```text
+modelos/pca_base.npz
+```
+
+Este es el extractor PCA genérico entrenado previamente y distribuido con el repositorio.
+
+**El sistema no entrena un PCA alternativo con las fotografías inscritas si falta este archivo.**
+
+En ese caso, `montar.py` cancela la ejecución y muestra un mensaje de error.
+
+Además, cuando el archivo está presente, se verifica que su huella coincide con la establecida en `config.HUELLA_MODELO_BASE`.
+
+Estas comprobaciones permiten mantener un extractor consistente entre diferentes montajes y evitan sustituirlo accidentalmente por otro modelo.
+
+### 4.4. Umbral de decisión
 
 Por defecto, `montar.py` calcula un **umbral provisional** a partir de las distancias entre identidades diferentes.
 
@@ -269,13 +287,20 @@ La implementación actual combina características obtenidas de la cara completa
 
 Los coeficientes se normalizan y los templates se comparan mediante distancia coseno.
 
-### Comportamiento actual del montaje
+### Independencia del extractor
 
-Cuando `modelos/pca_base.npz` está disponible, `montar.py` lo carga y comprueba que su huella coincide con la esperada.
+El extractor PCA utilizado durante la inscripción es el modelo genérico incluido en el repositorio.
 
-**Limitación pendiente de corregir:** si no encuentra ese archivo, la versión actual del script todavía puede entrenar un PCA alternativo utilizando las propias fotografías de inscripción.
+Si dicho modelo no está disponible, el montaje se cancela.
 
-Este comportamiento se revisará para garantizar que todas las ejecuciones utilicen el mismo extractor genérico.
+Por tanto:
+
+- La inscripción de una identidad no requiere volver a entrenar el PCA.
+- La incorporación de nuevas personas no modifica el extractor.
+- Los templates se obtienen utilizando una representación común.
+- El montaje no sustituye el extractor por otro entrenado con los propios inscritos.
+
+Esta separación entre entrenamiento del extractor e inscripción es importante para la evaluación del sistema biométrico.
 
 ## 9. Control de calidad de las imágenes
 
@@ -427,6 +452,7 @@ Se han realizado correcciones relacionadas con:
 - La ejecución mediante Docker.
 - Las instrucciones de instalación y ejecución.
 - La protección frente a reconstrucciones accidentales de la base de datos.
+- El uso obligatorio del PCA genérico durante el montaje.
 - La integración de pruebas mediante GitHub Actions.
 
 Queda pendiente desarrollar un protocolo de evaluación específico que permita medir el rendimiento y estudiar las limitaciones del sistema.

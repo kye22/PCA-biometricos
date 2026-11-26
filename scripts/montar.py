@@ -63,18 +63,17 @@ def ojos_manuales() -> dict:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--componentes", type=int, default=config.N_COMPONENTES)
     p.add_argument("--far", type=float, default=0.02,
                    help="fracción de impostores que se aceptaría con el umbral (por defecto 2%%)")
     p.add_argument("--umbral", type=float, default=None,
                    help="fijar el umbral a mano (p. ej. 0.45, el calibrado con evaluacion/calibrar_umbral.py)")
-    
+
     p.add_argument(
     "--recrear",
     action="store_true",
     help="Reconstruye la base de datos y el modelo, reemplazando la inscripción anterior"
     )
-    
+
     args = p.parse_args()
     # Evitar reconstrucciones accidentales de una instalación existente.
     if not args.recrear:
@@ -90,6 +89,15 @@ def main():
                 "para evitar sobrescribir la base de datos y el modelo.\n"
                 "Si deseas reconstruirlos, ejecuta montar.py con --recrear."
             )
+
+    # Comprobar el extractor antes de procesar fotos o modificar datos.
+    if not config.RUTA_MODELO_BASE.is_file():
+        sys.exit(
+            f"ERROR: no se encuentra el extractor PCA genérico: "
+            f"{config.RUTA_MODELO_BASE}\n"
+            "Se cancela el montaje. No se entrenará un PCA "
+            "alternativo con las personas inscritas."
+        )
 
     fotos = preparar_fotos()
 
@@ -118,19 +126,27 @@ def main():
         caras.append(preprocesado.normalizar(cara))
         print(f"  ok    {f.name:48s} {info}")
 
-    # --- 4. extractor -----------------------------------------------------------------
-    if config.RUTA_MODELO_BASE.exists():
-        modelo = ModeloPCA.cargar(config.RUTA_MODELO_BASE)
-        if modelo.huella() != config.HUELLA_MODELO_BASE:
-            sys.exit(f"{config.RUTA_MODELO_BASE.name} no es el del repositorio (huella distinta). "
-                     "Si lo has reentrenado tú, actualiza config.HUELLA_MODELO_BASE.")
-        print(f"\nPCA genérico ({config.RUTA_MODELO_BASE.name}): K={modelo.k} eigenfaces + interior, template de {modelo.dim} "
-              f"({modelo.varianza_explicada():.0%} de la varianza de su base de entrenamiento)")
-    else:
-        entrenamiento = np.stack(caras + [c[:, ::-1] for c in caras])   # + espejos
-        modelo = ModeloPCA.entrenar(entrenamiento, args.componentes)
-        print(f"\nAVISO: falta {config.RUTA_MODELO_BASE.name}; PCA entrenado con los propios inscritos "
-              f"({len(entrenamiento)} caras, K={modelo.dim}). Peor: ver scripts/entrenar_pca.py")
+    # --- 4. extractor -------------------------------------------------------------
+    # El extractor debe ser siempre el PCA genérico del repositorio.
+    modelo = ModeloPCA.cargar(config.RUTA_MODELO_BASE)
+
+    if modelo.huella() != config.HUELLA_MODELO_BASE:
+        sys.exit(
+            f"{config.RUTA_MODELO_BASE.name} no es el del repositorio "
+            "(huella distinta). "
+            "Si lo has reentrenado tú, actualiza config.HUELLA_MODELO_BASE."
+        )
+
+    print(
+        f"\nPCA genérico ({config.RUTA_MODELO_BASE.name}): "
+        f"K={modelo.k} eigenfaces + interior, "
+        f"template de {modelo.dim} "
+        f"({modelo.varianza_explicada():.0%} "
+        "de la varianza de su base de entrenamiento)"
+    )
+
+
+
     if seguridad.crear_clave():
         print(f"Clave nueva en {config.RUTA_CLAVE} (secreta: no va en git; sin ella la BD no se puede leer)")
     api.recargar()
