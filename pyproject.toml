@@ -24,4 +24,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]   # "." para que los tests encuentren evaluacion/ también con `pytest` a secas
